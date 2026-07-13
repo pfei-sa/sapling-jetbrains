@@ -1,10 +1,14 @@
 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Original sprout mark for the Sapling ISL tool window. Drawn from scratch (not derived
-       from Meta's Sapling logo). Monochrome so the platform themes it in the tool-window stripe;
-       sapling_dark.svg is the dark-theme variant. -->
-  <g fill="#6E6E6E">
-    <path d="M0 0 C -3 -3 -3 -7 0 -9 C 3 -7 3 -3 0 0 Z" transform="translate(8 10) rotate(-35)"/>
-    <path d="M0 0 C -3 -3 -3 -7 0 -9 C 3 -7 3 -3 0 0 Z" transform="translate(8 10) rotate(35)"/>
+  <!-- Original sprout mark for the Sapling ISL tool window (16x16 = New UI Compact Mode + old UI;
+       sapling@20x20.svg is the standard New UI size). Drawn from scratch, not derived from Meta's
+       Sapling logo. Bold, near-full-bleed so it reads at stripe size.
+       Color = the New UI palette grey #6C707E: the New UI recolors the icon to WHITE on the active
+       (highlighted-blue) stripe button by swapping this exact palette value, so it must be #6C707E
+       (NOT the classic-UI #6E6E6E) or it stays grey and vanishes when selected. sapling_dark.svg
+       is the dark-theme variant (#CED0D6). -->
+  <path d="M8 15 L8 7.5" stroke="#6C707E" stroke-width="2.2" stroke-linecap="round"/>
+  <g fill="#6C707E">
+    <path d="M8 9.2 C 3.6 9 1.4 5.8 2.2 2.2 C 6 3.2 8.2 6 8 9.2 Z"/>
+    <path d="M8 9.2 C 12.4 9 14.6 5.8 13.8 2.2 C 10 3.2 7.8 6 8 9.2 Z"/>
   </g>
-  <path d="M8 10 L8 15" stroke="#6E6E6E" stroke-width="1.5" stroke-linecap="round"/>
 </svg>

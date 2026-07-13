@@ -1,0 +1,12 @@
+<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Standard New UI tool-window stripe size (20x20). Same sprout mark as sapling.svg, scaled to
+       fill the larger canvas. New UI palette grey #6C707E so it recolors to white on the active
+       stripe button. sapling@20x20_dark.svg is the dark variant. -->
+  <g transform="scale(1.25)">
+    <path d="M8 15 L8 7.5" stroke="#6C707E" stroke-width="2.2" stroke-linecap="round"/>
+    <g fill="#6C707E">
+      <path d="M8 9.2 C 3.6 9 1.4 5.8 2.2 2.2 C 6 3.2 8.2 6 8 9.2 Z"/>
+      <path d="M8 9.2 C 12.4 9 14.6 5.8 13.8 2.2 C 10 3.2 7.8 6 8 9.2 Z"/>
+    </g>
+  </g>
+</svg>

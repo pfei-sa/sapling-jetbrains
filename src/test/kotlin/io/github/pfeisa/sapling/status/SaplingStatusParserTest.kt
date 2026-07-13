@@ -29,6 +29,27 @@ class SaplingStatusParserTest {
     }
 
     @Test
+    fun preservesIgnoredDirectoryEntriesVerbatim() {
+        // `sl status -i --terse=i` collapses fully-ignored dirs to a single `I` entry with a trailing slash.
+        val json = """
+            [
+             { "path": "build/",           "status": "I" },
+             { "path": "docs/internal/",   "status": "I" },
+             { "path": "scratch.tmp",      "status": "I" }
+            ]
+        """.trimIndent()
+
+        val entries = parseSaplingStatus(json)
+
+        assertEquals(3, entries.size)
+        assertTrue(entries.all { it.status == SaplingStatusCode.IGNORED })
+        // The trailing slash is retained verbatim so the consumer can derive the directory flag.
+        assertEquals("build/", entries[0].path)
+        assertEquals("docs/internal/", entries[1].path)
+        assertEquals("scratch.tmp", entries[2].path)
+    }
+
+    @Test
     fun emptyInputYieldsEmptyList() {
         assertTrue(parseSaplingStatus("").isEmpty())
         assertTrue(parseSaplingStatus("[]").isEmpty())

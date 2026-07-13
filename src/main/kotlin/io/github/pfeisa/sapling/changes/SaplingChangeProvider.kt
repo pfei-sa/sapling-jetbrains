@@ -17,11 +17,13 @@ import com.intellij.openapi.vcs.changes.ChangelistBuilder
 import com.intellij.openapi.vcs.changes.LocallyDeletedChange
 import com.intellij.openapi.vcs.changes.VcsDirtyScope
 import com.intellij.vcsUtil.VcsUtil
+import java.nio.file.Path
 import java.nio.file.Paths
 
 /**
- * Reports working-copy changes to the IDE. Runs off the EDT and issues exactly ONE
- * `sl status` per invocation (never per-file, never a full rescan of unchanged files).
+ * Reports working-copy changes to the IDE. Runs off the EDT and issues a fixed, small number of `sl`
+ * commands per invocation (never per-file, never a full rescan of unchanged files): one full-repo
+ * `sl status` for changes, plus a best-effort `sl status -i --terse=i` to grey ignored files.
  */
 class SaplingChangeProvider(
     private val project: Project,
@@ -43,6 +45,11 @@ class SaplingChangeProvider(
         // Sapling still reports changes; `.sl`-only detection would return null in dotgit mode.
         val root = SaplingRepoDetector.findWorkingCopyRoot(Paths.get(basePath)) ?: return
         val rootStr = root.toString()
+
+        // Grey ignored files (directory-collapsed, best-effort). Done first so the early returns below
+        // (empty change set / unresolved parent) can never skip it — ignored dirs still grey in a repo
+        // with no pending changes.
+        reportIgnoredFiles(root, rootStr, builder, progress)
 
         val statusResult = cli.run(rootStr, listOf("status", "-Tjson", "--copies"), progress)
         // Convert a cancel into a PCE (matching resolveCurrentCommit); a normal `return` here would
@@ -69,9 +76,11 @@ class SaplingChangeProvider(
                 SaplingStatusCode.UNTRACKED ->
                     builder.processUnversionedFile(VcsUtil.getFilePath(nio.toFile(), false))
 
-                SaplingStatusCode.IGNORED ->
-                    // Dormant unless `sl status` is invoked with -i/--ignored; the handler is wired for that future flag.
-                    builder.processIgnoredFile(VcsUtil.getFilePath(nio.toFile(), false))
+                SaplingStatusCode.IGNORED -> {
+                    // Ignored files are reported by reportIgnoredFiles() via a separate `-i --terse=i` call.
+                    // The change query here has no `-i`, so this never fires — kept as an explicit no-op so an
+                    // `I` entry can never fall through to the `else` branch and be mis-mapped to a Change.
+                }
 
                 SaplingStatusCode.MISSING ->
                     builder.processLocallyDeletedFile(
@@ -96,4 +105,53 @@ class SaplingChangeProvider(
         val node = result.stdout.trim()
         return if (result.success && node.isNotEmpty()) SaplingRevisionNumber(node) else null
     }
+
+    /**
+     * Reports ignored files/directories so the IDE greys them. Uses `--terse=i`, which collapses a
+     * fully-ignored directory to a single entry (e.g. `build/`) — bounded by the number of top-level
+     * ignored dirs, not the file count. `-i` shows ONLY ignored, so this MUST be its own call: appending
+     * it to the change query would drop the actual changes.
+     *
+     * Best-effort: `--terse` is a hidden `sl` flag, so if the call (or parse) ever fails, greying is
+     * skipped with a warning rather than breaking change reporting. Only cancellation propagates.
+     */
+    private fun reportIgnoredFiles(
+        root: Path,
+        rootStr: String,
+        builder: ChangelistBuilder,
+        progress: ProgressIndicator,
+    ) {
+        val result = cli.run(rootStr, listOf("status", "-i", "--terse=i", "-Tjson"), progress)
+        if (result.cancelled) throw ProcessCanceledException()
+        if (!result.success) {
+            LOG.warn("sl status -i failed; ignored files will not be greyed: ${result.stderr}")
+            return
+        }
+        val entries = try {
+            parseSaplingStatus(result.stdout)
+        } catch (e: ProcessCanceledException) {
+            throw e
+        } catch (e: Exception) {
+            LOG.warn("Could not parse ignored-file status; ignored files will not be greyed", e)
+            return
+        }
+        for (entry in entries) {
+            ProgressManager.checkCanceled()
+            if (entry.status != SaplingStatusCode.IGNORED) continue
+            val target = ignoredFileTarget(entry.path)
+            val nio = root.resolve(target.relativePath)
+            builder.processIgnoredFile(VcsUtil.getFilePath(nio.toFile(), target.isDirectory))
+        }
+    }
 }
+
+/** An ignored `sl status` path split into its repo-relative form and whether it denotes a directory. */
+internal data class IgnoredFileTarget(val relativePath: String, val isDirectory: Boolean)
+
+/**
+ * Interprets a path from `sl status -i --terse=i`. `--terse=i` collapses a fully-ignored directory to one
+ * entry with a trailing slash (e.g. `build/`, `docs/internal/`); a lone ignored file has none. The trailing
+ * slash is the directory signal — strip it and remember it so a directory greys its whole subtree.
+ */
+internal fun ignoredFileTarget(path: String): IgnoredFileTarget =
+    IgnoredFileTarget(path.trimEnd('/'), path.endsWith("/"))

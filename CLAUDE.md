@@ -86,7 +86,7 @@ src/main/kotlin/io/github/pfeisa/sapling/
 
 ## Known limitations (intentional in v0.1 — don't "fix" as bugs without a reason)
 
-- Change provider runs a full-repo `sl status` (ignores `dirtyScope`); ignored files aren't listed (no `-i`).
+- Change provider runs a full-repo `sl status` (ignores `dirtyScope`). Ignored files ARE reported (so they grey out) via a separate best-effort `sl status -i --terse=i` call that collapses fully-ignored directories to one entry each (`--terse` is a hidden `sl` flag; if it fails, greying is skipped without breaking change reporting).
 - `DiffProvider.getCurrentRevision` = working-copy parent; `getLatestCommittedRevision` = null.
 - `VcsLogProvider.readFullDetails` returns empty per-commit changes (Log "Changes" sub-panel is empty); `readAllHashes` buffers full output before streaming.
 - ISL webview interactions and live VCS operations are best validated with `./gradlew runIde` (not covered by headless tests).

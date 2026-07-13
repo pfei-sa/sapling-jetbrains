@@ -28,10 +28,12 @@ class SaplingDiffProvider(
         return if (result.success && node.isNotEmpty()) SaplingRevisionNumber(node) else null
     }
 
-    override fun getCurrentRevision(file: VirtualFile): VcsRevisionNumber? = headRevision(file.toNioPath())
+    override fun getCurrentRevision(file: VirtualFile): VcsRevisionNumber? =
+        SaplingPaths.nioPathOrNull(file)?.let { headRevision(it) }
 
     override fun getLastRevision(virtualFile: VirtualFile): ItemLatestState? {
-        val rev = headRevision(virtualFile.toNioPath()) ?: return null
+        val nio = SaplingPaths.nioPathOrNull(virtualFile) ?: return null
+        val rev = headRevision(nio) ?: return null
         return ItemLatestState(rev, true, true)
     }
 
@@ -43,8 +45,9 @@ class SaplingDiffProvider(
     override fun getLatestCommittedRevision(vcsRoot: VirtualFile): VcsRevisionNumber? = null
 
     override fun createFileContent(revisionNumber: VcsRevisionNumber, selectedFile: VirtualFile): ContentRevision? {
-        val root = SaplingPaths.repoRoot(selectedFile.toNioPath()) ?: return null
-        val relative = SaplingPaths.relative(root, selectedFile.toNioPath()) ?: return null
+        val nio = SaplingPaths.nioPathOrNull(selectedFile) ?: return null
+        val root = SaplingPaths.repoRoot(nio) ?: return null
+        val relative = SaplingPaths.relative(root, nio) ?: return null
         val rev = revisionNumber as? SaplingRevisionNumber ?: SaplingRevisionNumber(revisionNumber.asString())
         return SaplingContentRevision(VcsUtil.getFilePath(selectedFile), rev, root.toString(), relative, cli)
     }

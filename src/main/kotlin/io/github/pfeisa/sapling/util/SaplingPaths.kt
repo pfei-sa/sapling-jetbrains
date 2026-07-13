@@ -1,10 +1,20 @@
 package io.github.pfeisa.sapling.util
 
 import io.github.pfeisa.sapling.detection.SaplingRepoDetector
+import com.intellij.openapi.vfs.VirtualFile
 import java.nio.file.Path
 import java.nio.file.Paths
 
 object SaplingPaths {
+    /**
+     * [file] as an nio [Path], or null if it is a non-local VirtualFile (in-memory scratch
+     * buffer, diff-view dummy, LightVirtualFile). `VirtualFile.toNioPath()` throws
+     * [UnsupportedOperationException] for such files. Every platform-facing predicate the IDE
+     * may poll on an *arbitrary* editor file must funnel through this so a non-local file is
+     * reported as "not ours" rather than letting that exception escape into the IDE.
+     */
+    fun nioPathOrNull(file: VirtualFile): Path? = runCatching { file.toNioPath() }.getOrNull()
+
     /**
      * Resolves the working-copy root for a path the Sapling VCS has been asked to act on.
      * Matches `.sl` **or** dotgit-mode (`.git`) roots — the same detection ISL uses — so the

@@ -26,8 +26,11 @@ class SaplingHistoryProvider(
     override fun getHelpId(): String? = null
     override fun supportsHistoryForDirectories(): Boolean = false
     override fun getHistoryDiffHandler() = null
-    override fun canShowHistoryFor(file: VirtualFile): Boolean =
-        !file.isDirectory && SaplingPaths.repoRoot(file.toNioPath()) != null
+    override fun canShowHistoryFor(file: VirtualFile): Boolean {
+        if (file.isDirectory) return false
+        val nio = SaplingPaths.nioPathOrNull(file) ?: return false
+        return SaplingPaths.repoRoot(nio) != null
+    }
 
     override fun createSessionFor(filePath: FilePath): VcsHistorySession? {
         val revisions = loadHistory(filePath)

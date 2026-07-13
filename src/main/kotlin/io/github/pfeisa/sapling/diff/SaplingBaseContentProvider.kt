@@ -18,11 +18,14 @@ import com.intellij.vcsUtil.VcsUtil
 class SaplingBaseContentProvider(@Suppress("unused") private val project: Project) : VcsBaseContentProvider {
     private val cli = SaplingCli()
 
-    override fun isSupported(file: VirtualFile): Boolean =
-        !file.isDirectory && SaplingPaths.repoRoot(file.toNioPath()) != null
+    override fun isSupported(file: VirtualFile): Boolean {
+        if (file.isDirectory) return false
+        val nio = SaplingPaths.nioPathOrNull(file) ?: return false
+        return SaplingPaths.repoRoot(nio) != null
+    }
 
     override fun getBaseRevision(file: VirtualFile): VcsBaseContentProvider.BaseContent? {
-        val nio = file.toNioPath()
+        val nio = SaplingPaths.nioPathOrNull(file) ?: return null
         val root = SaplingPaths.repoRoot(nio) ?: return null
         val relative = SaplingPaths.relative(root, nio) ?: return null
         // Working-copy parent (`.`); no live VirtualFile needed.

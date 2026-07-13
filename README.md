@@ -1,6 +1,11 @@
-# Sapling for JetBrains
+# Sapling SCM Integration for JetBrains IDEs
 
-Sapling SCM (`sl`) integration for JetBrains IDEs — a native version-control provider for `.sl`-mode repositories **and** an embedded [Interactive Smartlog (ISL)](https://sapling-scm.com/docs/addons/isl) tool window, in one plugin.
+> Brings [Sapling SCM](https://sapling-scm.com/) (Meta's `sl`) into JetBrains IDEs — a **native version-control provider** for `.sl` working copies **and** an **embedded [Interactive Smartlog (ISL)](https://sapling-scm.com/docs/addons/isl)** tool window, in a single plugin.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![IntelliJ Platform](https://img.shields.io/badge/IntelliJ%20Platform-2024.2%2B-000?logo=jetbrains&logoColor=white)](https://plugins.jetbrains.com/docs/intellij/)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
+[![Verify Plugin](https://github.com/pfei-sa/sapling-jetbrains/actions/workflows/verify-plugin.yml/badge.svg)](https://github.com/pfei-sa/sapling-jetbrains/actions/workflows/verify-plugin.yml)
 
 > **Unofficial / independent project.** Not affiliated with, endorsed by, or sponsored by Meta.
 > "Sapling" is a trademark of Meta Platforms, Inc.; it is used here only to describe the software this plugin integrates with. The plugin talks to the `sl` command-line tool as a subprocess and contains none of Sapling's source code.
@@ -43,6 +48,20 @@ Hosts Sapling's own web GUI inside a JetBrains tool window and wires it to the I
 
 ---
 
+## Screenshots
+
+**Embedded Interactive Smartlog (ISL)** — Sapling's own web UI hosted in a tool window docked beside the editor and theme-synced to the IDE. View changes, commit, amend, and navigate the commit stack without leaving the IDE:
+
+![The Sapling ISL tool window docked beside the editor in a JetBrains IDE](docs/images/isl-tool-window.png)
+
+**Repository Log tab** — a native `VcsLogProvider` fed by `sl log`, with the commit graph, authors, and dates (bookmarks show as refs):
+
+![The native Sapling repository Log tab in a JetBrains IDE](docs/images/repository-log.png)
+
+> Shown running against the Sapling source repository itself. Try it live with `./gradlew runIde`.
+
+---
+
 ## Requirements
 
 - **A JetBrains IDE on the IntelliJ Platform 2024.2 or newer** (IDEA Community/Ultimate, and other IntelliJ-based IDEs). The ISL tool window additionally needs a JCEF-capable IDE build (most official builds qualify).
@@ -80,7 +99,7 @@ Standard IntelliJ Platform Gradle Plugin workflow:
 
 ## How it works
 
-Every Sapling operation is performed by **shelling out to the `sl` CLI** through a single wrapper (`SaplingCli`) that runs off the EDT, uses a console-style parent environment and UTF-8, and never swallows cancellation. Machine-readable output (`-Tjson`) is parsed into typed models; the results are translated into the corresponding IntelliJ VCS SPI objects. Because the plugin only invokes `sl` as a separate process (arms-length, over the CLI) and embeds none of its code, the plugin's own code is independent of Sapling's license.
+Every Sapling operation is performed by **shelling out to the `sl` CLI** through a single wrapper (`SaplingCli`) that runs off the EDT, uses a console-style parent environment and UTF-8, and never swallows cancellation. Machine-readable output (`-Tjson`) is parsed into typed models; the results are translated into the corresponding IntelliJ VCS SPI objects. The plugin invokes `sl` only as a separate, arm's-length process and embeds none of its code — which is also what keeps the plugin's own code cleanly decoupled from Sapling's license (see [License](#license)).
 
 Key building blocks:
 
@@ -147,6 +166,14 @@ Live UI behavior (ISL rendering, and diff/commit/history/blame against a real re
 - The repo Log tab's per-commit **Changes** sub-panel is empty (listing a commit's changed files is a follow-up); commit metadata, graph, and refs are populated.
 - `readAllHashes` buffers the full `sl log` output before streaming (bounded by repo size).
 - ISL webview interactions (file-click, theme, clipboard) rely on Sapling's `androidStudio` platform client and are best validated in a running IDE.
+
+---
+
+## Contributing & security
+
+Issues and pull requests are welcome. Please keep the non-affiliation and trademark notices intact and follow the existing conventions — see [`CLAUDE.md`](CLAUDE.md) for the architecture map and hard rules (threading, off-EDT `sl` execution, JCEF hygiene, `List<String>` command args).
+
+**Security:** please report vulnerabilities privately — see [`SECURITY.md`](SECURITY.md). Note the trust boundary documented there: opening a Sapling repository runs `sl` in that directory, which can execute repository-local configuration, so only open repositories you trust.
 
 ---
 

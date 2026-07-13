@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>io.github.pfeisa.sapling</id>
     <name>Sapling SCM Integration</name>
-    <vendor url="https://github.com/pfei-sa">Peng Fei</vendor>
+    <vendor email="pfei.sa.8@gmail.com" url="https://github.com/pfei-sa">Peng Fei</vendor>
     <description><![CDATA[
         <p><b>Sapling SCM (<code>sl</code>) integration for JetBrains IDEs.</b> Brings first-class
         version-control support to <a href="https://sapling-scm.com/">Sapling</a> working copies,

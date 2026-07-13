@@ -1,0 +1,19 @@
+# Build output
+.gradle/
+build/
+/out/
+
+# IDE
+.idea/
+*.iml
+
+# IntelliJ Platform Gradle Plugin caches + sandbox (large; regenerated on build — never commit)
+.intellijPlatform/
+.kotlin/
+
+# Local Claude Code / agent settings (per-user)
+.claude/
+
+# Internal design docs + scratch (not part of the distributed plugin)
+.superpowers
+docs/superpowers

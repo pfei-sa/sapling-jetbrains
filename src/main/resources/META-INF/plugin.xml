@@ -1,0 +1,82 @@
+<idea-plugin>
+    <id>io.github.pfeisa.sapling</id>
+    <name>Sapling SCM Integration</name>
+    <vendor url="https://github.com/pfei-sa">Peng Fei</vendor>
+    <description><![CDATA[
+        <p><b>Sapling SCM (<code>sl</code>) integration for JetBrains IDEs.</b> Brings first-class
+        version-control support to <a href="https://sapling-scm.com/">Sapling</a> working copies,
+        which the bundled Git integration cannot operate on.</p>
+
+        <p><b>Native VCS provider</b> for <code>.sl</code>-mode repositories:</p>
+        <ul>
+          <li>Changes view, side-by-side diff, and revert against committed content</li>
+          <li>Per-file history and per-line blame / annotate</li>
+          <li>A repository Log tab with commit graph and bookmarks as refs</li>
+          <li>A 3-way merge dialog for resolving conflicts</li>
+          <li>Actions for pull, push, goto, uncommit, shelve/unshelve, and bookmarks</li>
+        </ul>
+
+        <p><b>Embedded Interactive Smartlog (ISL)</b> — Sapling's own web UI hosted in a tool window,
+        wired to the IDE: click a file in ISL to open it in the editor, theme-synced to the IDE, with
+        commit and amend performed in ISL (matching Sapling's no-staging-area model).</p>
+
+        <p>Everything works by invoking the <code>sl</code> command-line tool as a subprocess; the
+        plugin embeds no Sapling source code and requires the Sapling CLI to be installed.</p>
+
+        <p><em>Unofficial, independent project. Not affiliated with, endorsed by, or sponsored by Meta.
+        "Sapling" is a trademark of Meta Platforms, Inc., used here only to describe the software this
+        plugin integrates with.</em></p>
+    ]]></description>
+
+    <change-notes><![CDATA[
+        <p><b>0.1.0</b> — Initial release: native Sapling VCS provider (changes, diff, revert, history,
+        blame, log, 3-way merge) plus the embedded ISL tool window with IDE bridge and theme sync.</p>
+    ]]></change-notes>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.vcs</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- SaplingSettings is a light @Service (code-registered); do NOT also declare it here. -->
+        <vcs name="Sapling" vcsClass="io.github.pfeisa.sapling.SaplingVcs" displayName="Sapling"/>
+        <vcsRootChecker implementation="io.github.pfeisa.sapling.detection.SaplingVcsRootChecker"/>
+        <toolWindow id="Sapling ISL" anchor="right"
+                    icon="/icons/sapling.svg"
+                    factoryClass="io.github.pfeisa.sapling.isl.IslToolWindowFactory"/>
+        <notificationGroup id="Sapling" displayType="BALLOON"/>
+        <applicationConfigurable parentId="tools"
+                                 instance="io.github.pfeisa.sapling.settings.SaplingConfigurable"
+                                 id="io.github.pfeisa.sapling.settings"
+                                 displayName="Sapling"/>
+        <logProvider implementation="io.github.pfeisa.sapling.log.SaplingLogProvider"/>
+        <vcs.baseContentProvider implementation="io.github.pfeisa.sapling.diff.SaplingBaseContentProvider"/>
+        <postStartupActivity implementation="io.github.pfeisa.sapling.startup.SaplingDotGitHint"/>
+        <postStartupActivity implementation="io.github.pfeisa.sapling.startup.SaplingAutoOpenIsl"/>
+        <statusBarWidgetFactory id="Sapling.CommitWidget"
+                                implementation="io.github.pfeisa.sapling.widget.SaplingWidgetFactory"
+                                order="first"/>
+    </extensions>
+
+    <actions>
+        <action id="Sapling.RestartIslServer"
+                class="io.github.pfeisa.sapling.isl.RestartIslServerAction"
+                text="Restart ISL Server"
+                description="Stop the Sapling ISL server so it restarts on next open"/>
+
+        <group id="Sapling.Menu" text="Sapling" popup="true">
+            <add-to-group group-id="VcsGroups" anchor="last"/>
+            <action id="Sapling.Goto" class="io.github.pfeisa.sapling.actions.SaplingGotoAction" text="Goto Commit…"/>
+            <action id="Sapling.Pull" class="io.github.pfeisa.sapling.actions.SaplingPullAction" text="Pull"/>
+            <action id="Sapling.Push" class="io.github.pfeisa.sapling.actions.SaplingPushAction" text="Push"/>
+            <action id="Sapling.Uncommit" class="io.github.pfeisa.sapling.actions.SaplingUncommitAction" text="Uncommit"/>
+            <action id="Sapling.Shelve" class="io.github.pfeisa.sapling.actions.SaplingShelveAction" text="Shelve"/>
+            <action id="Sapling.Unshelve" class="io.github.pfeisa.sapling.actions.SaplingUnshelveAction" text="Unshelve"/>
+            <action id="Sapling.CreateBookmark" class="io.github.pfeisa.sapling.actions.SaplingCreateBookmarkAction" text="Create Bookmark…"/>
+            <action id="Sapling.DeleteBookmark" class="io.github.pfeisa.sapling.actions.SaplingDeleteBookmarkAction" text="Delete Bookmark…"/>
+            <action id="Sapling.ResolveConflicts" class="io.github.pfeisa.sapling.conflict.SaplingResolveConflictsAction" text="Resolve Conflicts…"/>
+        </group>
+        <action id="Sapling.CopyCommitHash" class="io.github.pfeisa.sapling.actions.CopyCommitHashAction" text="Copy Commit Hash">
+            <add-to-group group-id="Vcs.Log.ContextMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>

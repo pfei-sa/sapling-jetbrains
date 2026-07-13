@@ -1,0 +1,8 @@
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Dark-theme variant of sapling.svg. IconLoader auto-selects this via the _dark suffix. -->
+  <g fill="#AFB1B3">
+    <path d="M0 0 C -3 -3 -3 -7 0 -9 C 3 -7 3 -3 0 0 Z" transform="translate(8 10) rotate(-35)"/>
+    <path d="M0 0 C -3 -3 -3 -7 0 -9 C 3 -7 3 -3 0 0 Z" transform="translate(8 10) rotate(35)"/>
+  </g>
+  <path d="M8 10 L8 15" stroke="#AFB1B3" stroke-width="1.5" stroke-linecap="round"/>
+</svg>

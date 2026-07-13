@@ -17,5 +17,14 @@ class SaplingConfigurable : BoundConfigurable("Sapling") {
             checkBox("Open ISL automatically when a Sapling project opens")
                 .bindSelected(settings::autoOpenIsl)
         }
+        row {
+            checkBox("Hide IDE commit UI (commit in ISL)")
+                .bindSelected(settings::hideCommitUi)
+                .comment(
+                    "Sapling commits are made in the ISL tool window. This hides the IDE's inline " +
+                        "commit message box and grays the Commit action. Applies to the commit box " +
+                        "after reopening the project; the grayed action updates immediately.",
+                )
+        }
     }
 }

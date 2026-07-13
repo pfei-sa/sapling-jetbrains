@@ -13,6 +13,7 @@ class SaplingSettings : SerializablePersistentStateComponent<SaplingSettings.Sta
     data class State(
         @JvmField var executablePath: String = "sl",
         @JvmField var autoOpenIsl: Boolean = false,
+        @JvmField var hideCommitUi: Boolean = true,
     )
 
     var executablePath: String
@@ -22,6 +23,10 @@ class SaplingSettings : SerializablePersistentStateComponent<SaplingSettings.Sta
     var autoOpenIsl: Boolean
         get() = state.autoOpenIsl
         set(value) { updateState { it.copy(autoOpenIsl = value) } }
+
+    var hideCommitUi: Boolean
+        get() = state.hideCommitUi
+        set(value) { updateState { it.copy(hideCommitUi = value) } }
 
     companion object {
         fun getInstance(): SaplingSettings = service()

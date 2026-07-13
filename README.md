@@ -38,7 +38,7 @@ Sapling repositories don't work with the built-in Git integration. This plugin f
 - **Conflict resolution** — resolve merge conflicts in the IDE's built-in 3-way merge tool.
 - **Common actions** — pull, push, goto, uncommit, shelve/unshelve, manage bookmarks, and copy a commit hash, right from the VCS menu.
 
-> Committing and amending happen in the embedded ISL (below), not the IDE's Commit tool window — matching Sapling's no-staging-area workflow.
+> Committing and amending happen in the embedded ISL (below), not the IDE's Commit tool window — matching Sapling's no-staging-area workflow. The IDE's commit message box is hidden by default (the Local Changes view stays for reviewing and reverting); you can restore the native commit pane in **Settings → Tools → Sapling** if you prefer.
 
 **Interactive Smartlog, built in**
 
@@ -73,6 +73,7 @@ No Marketplace release yet — install from a built zip:
 
 - **`sl` executable path** — defaults to `sl` on your `PATH`; override if it lives elsewhere.
 - **Auto-open ISL** — open the Sapling ISL tool window automatically for Sapling projects (off by default).
+- **Hide IDE commit UI (commit in ISL)** — hide the IDE's inline commit box and gray the Commit action so committing happens in ISL (on by default). Applies to the commit box after reopening the project.
 
 ---
 

@@ -1,6 +1,6 @@
 # Sapling SCM Integration for JetBrains IDEs
 
-> Brings [Sapling SCM](https://sapling-scm.com/) (Meta's `sl`) into JetBrains IDEs — a **native version-control provider** for `.sl` working copies **and** an **embedded [Interactive Smartlog (ISL)](https://sapling-scm.com/docs/addons/isl)** tool window, in a single plugin.
+> Use [Sapling SCM](https://sapling-scm.com/) (`sl`) in your JetBrains IDE — full version-control support for Sapling repositories, plus Sapling's [Interactive Smartlog (ISL)](https://sapling-scm.com/docs/addons/isl) built right into a tool window.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![IntelliJ Platform](https://img.shields.io/badge/IntelliJ%20Platform-2024.2%2B-000?logo=jetbrains&logoColor=white)](https://plugins.jetbrains.com/docs/intellij/)
@@ -8,134 +8,62 @@
 [![Verify Plugin](https://github.com/pfei-sa/sapling-jetbrains/actions/workflows/verify-plugin.yml/badge.svg)](https://github.com/pfei-sa/sapling-jetbrains/actions/workflows/verify-plugin.yml)
 
 > **Unofficial / independent project.** Not affiliated with, endorsed by, or sponsored by Meta.
-> "Sapling" is a trademark of Meta Platforms, Inc.; it is used here only to describe the software this plugin integrates with. The plugin talks to the `sl` command-line tool as a subprocess and contains none of Sapling's source code.
+> "Sapling" is a trademark of Meta Platforms, Inc.; it's used here only to describe the software this plugin works with.
 
-- **Plugin ID:** `io.github.pfeisa.sapling`
-- **Compatibility:** IntelliJ Platform **2024.2+** (Plugin Verifier runs against IC 2024.2 / 2024.3 / 2025.1 / 2025.2 and IU 2025.3)
-- **Status:** early **v0.1**. Builds cleanly, unit tests pass, and the Plugin Verifier reports compatibility. The interactive surfaces (the ISL webview and live VCS operations) are implemented and build-verified; a hands-on pass in a running IDE against a real repository is the recommended next step before any Marketplace release.
-
----
-
-## What it does
-
-The plugin has two complementary pillars.
-
-### 1. Native Sapling VCS provider
-Registers Sapling as a first-class VCS so `.sl`-mode repositories (where Git4Idea can't operate) get real IDE version-control support:
-
-- **Changes view** — modified / added / removed / untracked / missing files, via a single batched `sl status -Tjson` per refresh (off the EDT).
-- **Diff** — native side-by-side diff of working-copy files against their committed content (`DiffProvider`, `sl cat`).
-- **Revert** — roll back working-copy changes through the IDE's standard Revert action (`sl revert`).
-- **File history** — per-file history backed by `sl log -Tjson`.
-- **Blame / annotate** — per-line author, date, and revision via `sl annotate -Tjson`.
-- **Repository Log tab** — a native `VcsLogProvider` fed by `sl log`, with bookmarks shown as refs.
-- **Conflict resolution** — a 3-way `MergeProvider` opens the IDE's merge dialog for `sl` conflicts (base/local/other via `sl cat`, mark-resolved via `sl resolve`).
-- **Status-bar widget** — shows the current commit / active bookmark.
-- **Commands** — Goto, Pull, Push, Uncommit (with confirmation), Shelve/Unshelve, create/delete Bookmarks, Copy Commit Hash, and Resolve Conflicts — each a thin action over a shared cancellable background runner that refreshes the VFS and reports success/failure.
-
-> **Committing and amending is done in the embedded ISL** (below), not the IDE's Commit tool window — the plugin deliberately ships no `CheckinEnvironment`, matching Sapling's no-staging-area model.
-
-**Ownership model:** `.sl`-mode roots are auto-detected as Sapling. **dotgit-mode** roots (a Git-backed Sapling checkout) default to Git4Idea; the plugin shows a one-time hint that you can switch such a root to Sapling via *Settings → Version Control → Directory Mappings* if you prefer.
-
-### 2. Embedded ISL deep bridge
-Hosts Sapling's own web GUI inside a JetBrains tool window and wires it to the IDE:
-
-- Launches the stock `sl web` server and loads it in a JCEF browser tool window (**Sapling ISL**, docked right).
-- **Open-file bridge** — clicking a file in ISL opens it in the IDE editor (via a `window.__IdeBridge` host bridge; paths are validated against the repo root).
-- **Clipboard bridge** — ISL "copy" actions use the IDE clipboard.
-- **Theme sync** — the ISL theme follows the IDE's light/dark theme, live.
-- Gracefully degrades to an explanatory message on IDE builds without a JCEF runtime.
+Sapling repositories don't work with the built-in Git integration. This plugin fills that gap: it gives Sapling checkouts real IDE version control, and embeds Sapling's own Interactive Smartlog so you can see and manage your commits without leaving the editor.
 
 ---
 
 ## Screenshots
 
-**Embedded Interactive Smartlog (ISL)** — Sapling's own web UI hosted in a tool window docked beside the editor and theme-synced to the IDE. View changes, commit, amend, and navigate the commit stack without leaving the IDE:
+**Interactive Smartlog (ISL)**, docked beside the editor and theme-synced to the IDE — view changes, commit, amend, and navigate your commit stack:
 
 ![The Sapling ISL tool window docked beside the editor in a JetBrains IDE](docs/images/isl-tool-window.png)
 
-**Repository Log tab** — a native `VcsLogProvider` fed by `sl log`, with the commit graph, authors, and dates (bookmarks show as refs):
+**Repository log** — the commit graph with authors, dates, and bookmarks:
 
-![The native Sapling repository Log tab in a JetBrains IDE](docs/images/repository-log.png)
+![The native Sapling repository log tab in a JetBrains IDE](docs/images/repository-log.png)
 
-> Shown running against the Sapling source repository itself. Try it live with `./gradlew runIde`.
+---
+
+## Features
+
+**Version control for Sapling repositories**
+
+- **Changes** — see modified, added, removed, and untracked files at a glance.
+- **Diff** — compare any file against its committed version, side by side.
+- **Revert** — roll back local changes with the IDE's standard Revert action.
+- **History & blame** — browse a file's past revisions, and see who last changed each line.
+- **Repository log** — the full commit graph with authors, dates, and bookmarks.
+- **Conflict resolution** — resolve merge conflicts in the IDE's built-in 3-way merge tool.
+- **Common actions** — pull, push, goto, uncommit, shelve/unshelve, manage bookmarks, and copy a commit hash, right from the VCS menu.
+
+> Committing and amending happen in the embedded ISL (below), not the IDE's Commit tool window — matching Sapling's no-staging-area workflow.
+
+**Interactive Smartlog, built in**
+
+- Opens Sapling's web UI in a dockable **Sapling ISL** tool window.
+- Click a file in ISL to open it in the editor.
+- ISL "copy" actions use the IDE clipboard, and the ISL theme follows your IDE's light/dark theme.
 
 ---
 
 ## Requirements
 
-- **A JetBrains IDE on the IntelliJ Platform 2024.2 or newer** (IDEA Community/Ultimate, and other IntelliJ-based IDEs). The ISL tool window additionally needs a JCEF-capable IDE build (most official builds qualify).
-- **The Sapling CLI (`sl`) installed and on your `PATH`** — or point the plugin at it explicitly in *Settings → Tools → Sapling*. See [sapling-scm.com](https://sapling-scm.com/) for installation.
-- To **build from source:** JDK **21**.
+- A JetBrains IDE on **IntelliJ Platform 2024.2 or newer** (IntelliJ IDEA and other IntelliJ-based IDEs). The ISL tool window needs a JCEF-enabled build — most official builds qualify.
+- The **Sapling CLI (`sl`)** installed and on your `PATH` — see [sapling-scm.com](https://sapling-scm.com/). You can point the plugin at a specific `sl` in *Settings → Tools → Sapling*.
 
 ---
 
-## Installing
+## Installation
 
-No Marketplace release yet. To use it now, build the plugin zip and install it from disk:
+No Marketplace release yet — install from a built zip:
 
-1. Build it (see below) — the artifact lands at `build/distributions/sapling-jetbrains-0.1.0.zip`.
-2. In your IDE: *Settings → Plugins → ⚙ → Install Plugin from Disk…* → select that zip → restart.
-3. Open a `.sl`-mode Sapling repository. Accept the **Sapling** VCS mapping when prompted (or set it under *Settings → Version Control → Directory Mappings*). Open the **Sapling ISL** tool window on the right to use ISL.
+1. Build it: `./gradlew buildPlugin` → the zip lands in `build/distributions/`.
+2. In your IDE: *Settings → Plugins → ⚙ → Install Plugin from Disk…*, select the zip, and restart.
+3. Open a Sapling repository. `.sl` repositories are detected automatically — accept the **Sapling** VCS mapping if prompted. Open the **Sapling ISL** tool window (docked right) to use ISL.
 
----
-
-## Building & developing
-
-Standard IntelliJ Platform Gradle Plugin workflow:
-
-```bash
-./gradlew buildPlugin     # assemble the installable plugin zip (build/distributions/)
-./gradlew runIde          # launch a sandbox IDE with the plugin loaded (manual testing)
-./gradlew test            # run the unit / light-platform test suite
-./gradlew verifyPlugin    # run the JetBrains Plugin Verifier (API compatibility)
-```
-
-**JDK note:** the build targets JVM 21 and needs a JDK 21 to run. If Gradle can't find it, either export `JAVA_HOME` pointing at a JDK 21, or set `org.gradle.java.home` in `~/.gradle/gradle.properties`.
-
-**Tech stack:** Kotlin 2.1.x (JVM 21), Gradle 9.6.1, IntelliJ Platform Gradle Plugin 2.18.1, IntelliJ Platform 2024.2, `kotlinx.serialization` (provided by the IDE), coroutines on injected service scopes.
-
----
-
-## How it works
-
-Every Sapling operation is performed by **shelling out to the `sl` CLI** through a single wrapper (`SaplingCli`) that runs off the EDT, uses a console-style parent environment and UTF-8, and never swallows cancellation. Machine-readable output (`-Tjson`) is parsed into typed models; the results are translated into the corresponding IntelliJ VCS SPI objects. The plugin invokes `sl` only as a separate, arm's-length process and embeds none of its code — which is also what keeps the plugin's own code cleanly decoupled from Sapling's license (see [License](#license)).
-
-Key building blocks:
-
-- `cli/SaplingCli` — off-EDT process execution (`GeneralCommandLine` + `CapturingProcessHandler`).
-- `command/SaplingCommandRunner` — one cancellable background task per mutating command; refreshes the VFS + dirty scope and notifies on completion. Every command action is a thin wrapper over it.
-- `SaplingVcs` — the `AbstractVcs` that wires up the change / diff / history / annotation providers plus the rollback and merge environments.
-- `isl/*` — `IslServerManager` (launches/parses `sl web --json`), `IslToolWindowFactory` + `IslBrowserPanel` (JCEF host, gated + with fallback), `IdeBridge` (`window.__IdeBridge`), `ThemeSync`.
-
----
-
-## Project layout
-
-```
-src/main/kotlin/io/github/pfeisa/sapling/
-├── cli/          # SaplingCli — off-EDT `sl` execution
-├── status/       # `sl status -Tjson` model + parser
-├── detection/    # .sl detection + VcsRootChecker (auto-claims only .sl)
-├── changes/      # ChangeProvider, revision + content-at-revision, change mapping
-├── diff/         # DiffProvider
-├── history/      # per-file VcsHistoryProvider + file revision
-├── blame/        # annotate parser, FileAnnotation, AnnotationProvider
-├── log/          # VcsLogProvider + ref manager (the repo-wide Log tab)
-├── merge/        # MergeProvider (IDE 3-way merge dialog)
-├── rollback/     # RollbackEnvironment + revert (IDE Revert action)
-├── command/      # SaplingCommandRunner
-├── actions/      # goto/pull/push/uncommit/shelve/unshelve, bookmarks, copy-hash
-├── widget/       # status-bar bookmark/commit widget
-├── conflict/     # resolve-conflicts action
-├── settings/     # persistent settings + Settings UI
-├── startup/      # dotgit hint + auto-open-ISL
-├── isl/          # ISL server manager, JCEF tool window, IDE bridge, theme sync
-├── util/         # notifications, path helpers
-└── SaplingVcs.kt # AbstractVcs registration
-```
-
-Every Sapling operation is a thin translation layer over the `sl` CLI; see [How it works](#how-it-works) below.
+> A Git-backed Sapling checkout (one with a `.git` directory) stays with the built-in Git integration by default; the plugin shows a one-time hint if you'd rather switch it to Sapling under *Settings → Version Control → Directory Mappings*.
 
 ---
 
@@ -143,51 +71,48 @@ Every Sapling operation is a thin translation layer over the `sl` CLI; see [How 
 
 *Settings → Tools → Sapling*:
 
-- **`sl` executable path** — defaults to `sl` (resolved on `PATH`); override if it lives elsewhere.
-- **Auto-open ISL** — when enabled, the Sapling ISL tool window opens automatically on project open for Sapling repositories (default off).
-
----
-
-## Testing
-
-- **Hermetic unit / light-platform tests** (`./gradlew test`) covering the CLI wrapper, all `-Tjson` parsers, `.sl` detection, the status→`Change` mapping (including rename de-duplication), the diff/merge/rollback providers, bookmarks, settings, and the ISL launch/scrub/theme helpers. The `sl log`/`sl annotate` parsers were validated against real `sl` output. Real-repo integration tests (`./gradlew integrationTest`, requires `sl` + `git`) exercise the providers against live repositories.
-- **JetBrains Plugin Verifier** (`./gradlew verifyPlugin`) reports **Compatible** across IC 2024.2 / 2024.3 / 2025.1 / 2025.2 and IU 2025.3.
-- A GitHub Actions workflow (`.github/workflows/verify-plugin.yml`) runs the tests, builds the plugin, and runs the verifier on push.
-
-Live UI behavior (ISL rendering, and diff/commit/history/blame against a real repository) is best exercised with `./gradlew runIde`.
+- **`sl` executable path** — defaults to `sl` on your `PATH`; override if it lives elsewhere.
+- **Auto-open ISL** — open the Sapling ISL tool window automatically for Sapling projects (off by default).
 
 ---
 
 ## Known limitations (v0.1)
 
-- The change provider runs a full-repo `sl status` per refresh rather than narrowing to the dirty scope. (`sl status` stays fast on large repos thanks to Sapling's watch/virtual-FS support.)
-- Ignored files aren't listed in the Changes view (the status call doesn't request `-i`); untracked and missing files are shown.
-- The diff provider resolves "current revision" as the working-copy parent; per-file "last committed revision" and "latest committed" precision are follow-ups.
-- The repo Log tab's per-commit **Changes** sub-panel is empty (listing a commit's changed files is a follow-up); commit metadata, graph, and refs are populated.
-- `readAllHashes` buffers the full `sl log` output before streaming (bounded by repo size).
-- ISL webview interactions (file-click, theme, clipboard) rely on Sapling's `androidStudio` platform client and are best validated in a running IDE.
+- Ignored files aren't shown in the Changes view (untracked and missing files are).
+- A commit's changed-file list in the repository log isn't populated yet (the graph, authors, and messages are).
+- ISL behavior is best experienced in a running IDE and can vary with your Sapling version.
+
+---
+
+## Building from source
+
+Requires **JDK 21**.
+
+```bash
+./gradlew buildPlugin   # build the installable zip
+./gradlew runIde        # try it in a sandbox IDE
+./gradlew test          # run the tests
+```
+
+See [`CLAUDE.md`](CLAUDE.md) for the architecture and contributor conventions.
 
 ---
 
 ## Contributing & security
 
-Issues and pull requests are welcome. Please keep the non-affiliation and trademark notices intact and follow the existing conventions — see [`CLAUDE.md`](CLAUDE.md) for the architecture map and hard rules (threading, off-EDT `sl` execution, JCEF hygiene, `List<String>` command args).
+Issues and pull requests are welcome — please keep the non-affiliation and trademark notices intact.
 
-**Security:** please report vulnerabilities privately — see [`SECURITY.md`](SECURITY.md). Note the trust boundary documented there: opening a Sapling repository runs `sl` in that directory, which can execute repository-local configuration, so only open repositories you trust.
+Found a security issue? Please report it privately — see [`SECURITY.md`](SECURITY.md). Note that opening a repository runs `sl` inside it, so only open repositories you trust.
 
 ---
 
 ## License
 
-**MIT** — see [`LICENSE`](LICENSE).
-
-The plugin's own code is original and permissively licensed even though Sapling itself is GPLv2, because the plugin only invokes `sl` as a **separate, arm's-length subprocess** over its command-line interface and parses its JSON output — it embeds none of Sapling's source. Under the FSF's own interpretation of the GPL, "pipes, sockets and command-line arguments" between two programs are "mere aggregation," not a combined/derivative work, so the plugin is not bound by Sapling's copyleft. (This is the well-settled, least-contested case, not legal advice — the boundary only holds while the interface stays arm's-length; do not embed Sapling source or exchange intimate internal data structures.)
-
-Contributions and any repackaging should preserve the non-affiliation and trademark notices above.
+[MIT](LICENSE). Sapling itself is GPLv2, but this plugin contains none of its code — it only runs the `sl` command-line tool as a separate process — so the plugin's own code is independently licensed. Please keep the non-affiliation and trademark notices when redistributing.
 
 ---
 
 ## Acknowledgements
 
-- [Sapling SCM](https://sapling-scm.com/) and its Interactive Smartlog, created by Meta — the tools this plugin integrates with.
-- Built on the [IntelliJ Platform](https://plugins.jetbrains.com/docs/intellij/welcome.html) VCS and JCEF APIs.
+- [Sapling SCM](https://sapling-scm.com/) and its Interactive Smartlog, created by Meta — the tools this plugin works with.
+- Built on the [IntelliJ Platform](https://plugins.jetbrains.com/docs/intellij/welcome.html).

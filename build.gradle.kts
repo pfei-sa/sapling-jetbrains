@@ -8,7 +8,9 @@ plugins {
 }
 
 group = "io.github.pfeisa.sapling"
-version = "0.1.0"
+// Overridable by the release workflow via `-PpluginVersion=0.1.<datetime>`; drives both the
+// zip filename and the injected `plugin.xml <version>`. Local builds fall back to the base.
+version = (findProperty("pluginVersion") as String?) ?: "0.1.0"
 
 repositories {
     mavenCentral()

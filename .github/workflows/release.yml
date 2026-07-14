@@ -1,0 +1,38 @@
+name: Release
+
+# Manual-only: GitHub restricts workflow_dispatch to accounts with write access,
+# so effectively only the repo owner can cut a release.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write  # create the release and its tag
+
+env:
+  BASE_VERSION: "0.1"  # bump to "0.2" etc. when moving to a new minor line
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compute version
+        id: version
+        run: echo "version=${BASE_VERSION}.$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
+      - name: Build plugin
+        run: ./gradlew test buildPlugin -PpluginVersion=${{ steps.version.outputs.version }}
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.version.outputs.version }}" \
+            build/distributions/*.zip \
+            --target "$GITHUB_SHA" \
+            --title "v${{ steps.version.outputs.version }}" \
+            --generate-notes

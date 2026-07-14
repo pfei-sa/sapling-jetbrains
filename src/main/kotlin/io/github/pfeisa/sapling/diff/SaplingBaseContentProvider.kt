@@ -4,6 +4,7 @@ import io.github.pfeisa.sapling.changes.SaplingContentRevision
 import io.github.pfeisa.sapling.changes.SaplingRevisionNumber
 import io.github.pfeisa.sapling.cli.SaplingCli
 import io.github.pfeisa.sapling.util.SaplingPaths
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.VcsException
 import com.intellij.openapi.vcs.history.VcsRevisionNumber
@@ -17,6 +18,10 @@ import com.intellij.vcsUtil.VcsUtil
  */
 class SaplingBaseContentProvider(@Suppress("unused") private val project: Project) : VcsBaseContentProvider {
     private val cli = SaplingCli()
+
+    companion object {
+        private val LOG = logger<SaplingBaseContentProvider>()
+    }
 
     override fun isSupported(file: VirtualFile): Boolean {
         if (file.isDirectory) return false
@@ -50,6 +55,7 @@ class SaplingBaseContentProvider(@Suppress("unused") private val project: Projec
         override fun loadContent(): String? = try {
             contentRevision.content
         } catch (e: VcsException) {
+            if (LOG.isDebugEnabled) LOG.debug("No committed base (expected for untracked file): ${e.message}")
             null
         }
     }

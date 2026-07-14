@@ -4,6 +4,7 @@ import io.github.pfeisa.sapling.cli.SaplingCli
 import io.github.pfeisa.sapling.cli.SaplingResult
 import io.github.pfeisa.sapling.util.SaplingNotifications
 import io.github.pfeisa.sapling.util.SaplingPaths
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
@@ -11,6 +12,8 @@ import java.nio.file.Paths
 
 /** Runs one `sl` subcommand as a cancellable background task, then refreshes + notifies. */
 object SaplingCommandRunner {
+
+    private val LOG = logger<SaplingCommandRunner>()
 
     fun run(
         project: Project,
@@ -43,15 +46,20 @@ object SaplingCommandRunner {
                     SaplingNotifications.info(project, "$title finished")
                     onSuccess(res)
                 } else if (res.timedOut) {
+                    LOG.warn("$title timed out after 30s")
                     SaplingNotifications.error(project, "$title timed out after 30s")
                 } else {
+                    LOG.warn("$title failed (exit ${res.exitCode}): ${res.stderr}")
                     SaplingNotifications.error(project, "$title failed: ${res.stderr}")
                 }
             }
 
             override fun onThrowable(error: Throwable) {
                 // ProcessCanceledException routes to onCancel, not here; surface real errors
-                // instead of the framework's silent event-log entry.
+                // instead of the framework's silent event-log entry. Log at warn (not error) to
+                // persist the stack trace without triggering the IDE error-reporter — an `sl`
+                // failure is usually environmental, not a plugin bug.
+                LOG.warn("$title failed", error)
                 SaplingNotifications.error(project, "$title failed: ${error.message ?: error.javaClass.simpleName}")
             }
         }.queue()

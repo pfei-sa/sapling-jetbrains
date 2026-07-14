@@ -68,7 +68,11 @@ class IslServerManager(
                         LOG.warn("sl web failed (exit ${result.exitCode}): ${scrubSlWebOutput(result.stderr)}")
                         IslLaunchResult.Failed("sl web exited with code ${result.exitCode}")
                     } else {
-                        parseIslLaunch(result.stdout.trim())
+                        // Log only the pre-scrubbed/constant Failed.error — never the raw output
+                        // or the serialization exception, which could echo the token-bearing URL.
+                        parseIslLaunch(result.stdout.trim()).also {
+                            if (it is IslLaunchResult.Failed) LOG.warn("ISL launch failed: ${it.error}")
+                        }
                     }
                 // isActive guards against a dispose() that cancelled the scope while the
                 // blocking `sl web` call was in flight — don't write state onto a disposed instance.

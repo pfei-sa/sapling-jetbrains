@@ -82,6 +82,17 @@ class SaplingCli(
             .withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
             .withCharset(charset)
 
+    private fun logInvocation(args: List<String>, workingDir: String) {
+        if (LOG.isDebugEnabled) LOG.debug("sl ${args.joinToString(" ")} (cwd=$workingDir)")
+    }
+
+    /** Logs abnormal outcomes only; never logs stderr (may carry the sl-web token URL). */
+    private fun logOutcome(args: List<String>, exitCode: Int, timedOut: Boolean, cancelled: Boolean) {
+        if (cancelled) return
+        if (timedOut) LOG.warn("sl ${args.joinToString(" ")} timed out")
+        else if (exitCode != 0 && LOG.isDebugEnabled) LOG.debug("sl ${args.joinToString(" ")} exited $exitCode")
+    }
+
     @RequiresBackgroundThread
     fun run(
         workingDir: String,
@@ -90,11 +101,13 @@ class SaplingCli(
         timeoutMs: Int = 30_000,
     ): SaplingResult {
         val cmd = buildCommandLine(workingDir, args)
+        logInvocation(args, workingDir)
         return try {
             val handler = CapturingProcessHandler(cmd)
             val output =
                 if (indicator != null) handler.runProcessWithProgressIndicator(indicator, timeoutMs)
                 else handler.runProcess(timeoutMs)
+            logOutcome(args, output.exitCode, output.isTimeout, output.isCancelled)
             SaplingResult(output.exitCode, output.stdout, output.stderr, output.isTimeout, output.isCancelled)
         } catch (e: ProcessCanceledException) {
             throw e // control-flow exception — never swallow
@@ -117,11 +130,13 @@ class SaplingCli(
         timeoutMs: Int = 30_000,
     ): SaplingByteResult {
         val cmd = buildCommandLine(workingDir, args, StandardCharsets.ISO_8859_1)
+        logInvocation(args, workingDir)
         return try {
             val handler = CapturingProcessHandler(cmd)
             val output =
                 if (indicator != null) handler.runProcessWithProgressIndicator(indicator, timeoutMs)
                 else handler.runProcess(timeoutMs)
+            logOutcome(args, output.exitCode, output.isTimeout, output.isCancelled)
             SaplingByteResult(
                 output.exitCode,
                 output.stdout.toByteArray(StandardCharsets.ISO_8859_1),
@@ -156,6 +171,7 @@ class SaplingCli(
         onLine: (String) -> Unit,
     ): SaplingStreamResult {
         val cmd = buildCommandLine(workingDir, args)
+        logInvocation(args, workingDir)
         val handler = try {
             OSProcessHandler(cmd)
         } catch (e: ExecutionException) {
@@ -186,6 +202,8 @@ class SaplingCli(
             handler.destroyProcess()
             throw e // control-flow exception — never swallow
         }
-        return SaplingStreamResult(handler.exitCode ?: -1, stderr.toString())
+        val exitCode = handler.exitCode ?: -1
+        if (exitCode != 0 && LOG.isDebugEnabled) LOG.debug("sl ${args.joinToString(" ")} exited $exitCode")
+        return SaplingStreamResult(exitCode, stderr.toString())
     }
 }

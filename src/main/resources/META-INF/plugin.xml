@@ -49,6 +49,8 @@
                                  id="io.github.pfeisa.sapling.settings"
                                  displayName="Sapling"/>
         <logProvider implementation="io.github.pfeisa.sapling.log.SaplingLogProvider"/>
+        <vcsAnnotationGutterActionProvider
+            implementation="io.github.pfeisa.sapling.blame.SaplingAnnotationGutterActionProvider"/>
         <vcs.baseContentProvider implementation="io.github.pfeisa.sapling.diff.SaplingBaseContentProvider"/>
         <postStartupActivity implementation="io.github.pfeisa.sapling.startup.SaplingDotGitHint"/>
         <postStartupActivity implementation="io.github.pfeisa.sapling.startup.SaplingAutoOpenIsl"/>

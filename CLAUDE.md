@@ -44,7 +44,9 @@ src/main/kotlin/io/github/pfeisa/sapling/
 ├── changes/                    ChangeProvider, SaplingRevisionNumber, SaplingContentRevision, mapping
 ├── diff/                       DiffProvider
 ├── history/                    per-file VcsHistoryProvider + SaplingFileRevision
-├── blame/                      annotate parser, FileAnnotation, AnnotationProvider
+├── blame/                      per-revision annotate parser + AnnotationProvider (`--rev`), FileAnnotation
+│                               (enriched tooltip, populated getRevisions()), gutter navigator (Log / file
+│                               history) + right-click action provider
 ├── log/                        VcsLogProvider + SaplingRefManager (repo-wide Log tab)
 ├── merge/                      SaplingMergeProvider (IDE 3-way merge dialog for `sl` conflicts)
 ├── rollback/                   SaplingRollbackEnvironment + SaplingRevert (IDE Revert → `sl revert`)
@@ -89,6 +91,10 @@ src/main/kotlin/io/github/pfeisa/sapling/
 - Change provider runs a full-repo `sl status` (ignores `dirtyScope`). Ignored files ARE reported (so they grey out) via a separate best-effort `sl status -i --terse=i` call that collapses fully-ignored directories to one entry each (`--terse` is a hidden `sl` flag; if it fails, greying is skipped without breaking change reporting).
 - `DiffProvider.getCurrentRevision` = working-copy parent; `getLatestCommittedRevision` = null.
 - `VcsLogProvider.readFullDetails` returns empty per-commit changes (Log "Changes" sub-panel is empty); `readAllHashes` buffers full output before streaming.
+- Blame: per-revision annotate is supported (`sl annotate --rev`); the gutter has an enriched tooltip
+  (hash/author/date/message), populated `getRevisions()`, left-click → VCS Log, and a right-click menu
+  (Show in Log / Show File History / Copy Revision Hash). Rename/copy-following across the annotated
+  revision is NOT handled (annotate uses the current working-copy path) — an intentional limitation.
 - ISL webview interactions and live VCS operations are best validated with `./gradlew runIde` (not covered by headless tests).
 
 ## Where things live

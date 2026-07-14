@@ -7,6 +7,9 @@ build/
 .idea/
 *.iml
 
+# macOS
+.DS_Store
+
 # IntelliJ Platform Gradle Plugin caches + sandbox (large; regenerated on build — never commit)
 .intellijPlatform/
 .kotlin/

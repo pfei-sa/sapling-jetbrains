@@ -79,9 +79,20 @@ No Marketplace release yet — install from a built zip:
 
 ## Known limitations (v0.1)
 
-- Ignored files aren't shown in the Changes view (untracked and missing files are).
-- A commit's changed-file list in the repository log isn't populated yet (the graph, authors, and messages are).
+- Blame doesn't follow file renames — it annotates the file at its current path.
 - ISL behavior is best experienced in a running IDE and can vary with your Sapling version.
+
+---
+
+## Troubleshooting
+
+The plugin logs its `sl` activity to the IDE log — useful when filing a bug report:
+
+1. *Help → Diagnostic Tools → Debug Log Settings…* and add `io.github.pfeisa.sapling`.
+2. Reproduce the problem.
+3. *Help → Show Log in Finder/Explorer* and attach `idea.log`.
+
+Every `sl` command the plugin runs is traced (at debug level) and failures are always recorded. The log never contains your ISL authentication token.
 
 ---
 

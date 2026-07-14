@@ -52,19 +52,28 @@ intellijPlatform {
             org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.INVALID_PLUGIN,
         )
         ides {
-            // Full supported range: sinceBuild floor (242) through 253 (2025.3). 2025.1 removed the
-            // implicit write-intent lock from Swing invokeLater / Dispatchers.Main; 2025.2 made lock
-            // acquisition cancellation-aware; 2025.3 added Dispatchers.UI (unused here). Resolving 253's
-            // unified `idea-2025.3-*` installer requires the IntelliJ Platform Gradle Plugin >= 2.12
-            // (→ Gradle 9). The `ide(type, version)` DSL of older plugins was replaced by `create(...)`.
+            // Full supported range: sinceBuild floor (242) through the latest 2026.2 EAP. 2025.1 removed
+            // the implicit write-intent lock from Swing invokeLater / Dispatchers.Main; 2025.2 made lock
+            // acquisition cancellation-aware; 2025.3 added Dispatchers.UI (unused here). Build-253 unified
+            // the IDEA distribution (no standalone `ideaIC` installer from 253 on), so 253/261 are
+            // verified against the unified `IU` build (262 pending EAP resolution — see below) — a sound
+            // superset proxy, since this plugin uses only platform/VCS APIs present in both IC and IU.
             create("IC", "2024.2")
             create("IC", "2024.3")
             create("IC", "2025.1")
             create("IC", "2025.2")
-            // Build-253 unified the IDEA distribution: there is no standalone `ideaIC-2025.3` installer,
-            // so IC can't be resolved by version here. Verify against the unified `IU` (Ultimate) build —
-            // a sound superset proxy, since this plugin uses only platform/VCS APIs present in both.
             create("IU", "2025.3")
+            create("IU", "2026.1.4")
+            // 2026.2 is still EAP/RC; track the latest 262 EAP from the snapshots repo (resolved by
+            // defaultRepositories()). Moving target — swap to a stable `create("IU", "2026.2")` at GA.
+            // To pin the exact build from a Marketplace report instead, use "262.8665.176-EAP-SNAPSHOT".
+            // Both "262-EAP-SNAPSHOT" and the exact pin "262.8665.176-EAP-SNAPSHOT" fail to resolve
+            // locally ("Couldn't resolve IntellijIdea download URL") even with intellijPlatform {
+            // snapshots() } added to repositories{} — the version->download-URL lookup fails before any
+            // network/repository fetch is attempted. IU 2026.1.4 alone reproduces all 3 known
+            // compatibility problems identically, so it remains the reliable gate.
+            // TODO: add at 2026.2 GA (create("IU", "2026.2")).
+            // create("IU", "262-EAP-SNAPSHOT")
         }
     }
 }

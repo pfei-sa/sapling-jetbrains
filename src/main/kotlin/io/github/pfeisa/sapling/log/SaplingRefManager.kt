@@ -4,7 +4,6 @@ import com.intellij.vcs.log.RefGroup
 import com.intellij.vcs.log.VcsRef
 import com.intellij.vcs.log.VcsRefType
 import com.intellij.vcs.log.VcsLogRefManager
-import com.intellij.vcs.log.impl.SimpleRefGroup
 import com.intellij.vcs.log.impl.SimpleRefType
 import java.awt.Color
 import java.io.DataInput
@@ -39,7 +38,7 @@ class SaplingRefManager : VcsLogRefManager {
     /** Used by the branch-filter pop-up: one flat group of all bookmark refs. */
     override fun groupForBranchFilter(refs: Collection<VcsRef>): List<RefGroup> {
         if (refs.isEmpty()) return emptyList()
-        return listOf(SimpleRefGroup("Bookmarks", refs.sortedWith(getLabelsOrderComparator()).toMutableList()))
+        return listOf(BookmarkRefGroup("Bookmarks", refs.sortedWith(getLabelsOrderComparator())))
     }
 
     /** Used by the commit-table ref column: one flat group per commit. */
@@ -49,7 +48,30 @@ class SaplingRefManager : VcsLogRefManager {
         showTagNames: Boolean,
     ): List<RefGroup> {
         if (refs.isEmpty()) return emptyList()
-        return listOf(SimpleRefGroup("Bookmarks", refs.sortedWith(getLabelsOrderComparator()).toMutableList()))
+        return listOf(BookmarkRefGroup("Bookmarks", refs.sortedWith(getLabelsOrderComparator())))
+    }
+
+    /**
+     * Local [RefGroup] implementation replacing `com.intellij.vcs.log.impl.SimpleRefGroup`. In 242
+     * that class's primary constructor had a defaulted `expanded: Boolean` parameter, so a 2-arg
+     * Kotlin call compiled to a reference to the synthetic default-args bridge
+     * `<init>(String, List, boolean, int, DefaultConstructorMarker)`; builds 261/262 dropped the
+     * parameter, making that bridge an unresolved-constructor binary incompatibility. Implementing
+     * [RefGroup] directly (a stable public interface that only shrank — 242's `isExpanded()` was
+     * dropped by 262) removes the coupling. `getColors()` mirrors SimpleRefGroup's own logic.
+     */
+    private class BookmarkRefGroup(
+        private val groupName: String,
+        private val groupRefs: List<VcsRef>,
+    ) : RefGroup {
+        override fun isExpanded(): Boolean = false
+        override fun getName(): String = groupName
+        override fun getRefs(): MutableList<VcsRef> = groupRefs.toMutableList()
+        override fun getColors(): List<Color> =
+            groupRefs.groupBy(VcsRef::getType).flatMap { (type, refsOfType) ->
+                val color = type.backgroundColor
+                if (refsOfType.size > 1) listOf(color, color) else listOf(color)
+            }
     }
 
     // --- Serialization (used for persisting the log index) ----------------

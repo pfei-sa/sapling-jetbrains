@@ -11,7 +11,7 @@ A JetBrains IDE plugin — **Sapling SCM (`sl`) integration** — with two pilla
 Everything is done by **shelling out to the `sl` CLI** and translating its `-Tjson` output into IntelliJ VCS SPI objects. The plugin embeds no Sapling source.
 
 - **Coordinates:** package / Gradle `group` / plugin `<id>` = `io.github.pfeisa.sapling`; `<vendor>` display name = `Peng Fei` (GitHub `pfei-sa`, `url="https://github.com/pfei-sa"`).
-- **Platform baseline:** IntelliJ Platform **2024.2+** (`sinceBuild = "242"`, open `untilBuild`). `verifyPlugin` is **Compatible across IC-242 / 243 / 251 / 252 and IU-253 (2025.3)**. (Build-253 unified the IDEA distribution — no standalone `ideaIC-2025.3` installer — so 2025.3 is verified against the superset `IU` build.)
+- **Platform baseline:** IntelliJ Platform **2024.2+** (`sinceBuild = "242"`, open `untilBuild`). `verifyPlugin` is **Compatible across IC-242 / 243 / 251 / 252 and IU-253 / 2026.1.4 (build 261)**. (Build-253 unified the IDEA distribution — no standalone `ideaIC` installer from 253 on — so 253 and 2026.1.4 are verified against the superset `IU` build. 2026.1/2026.2 (builds 261/262) removed `SimpleRefGroup`'s defaulted-arg constructor and the `VcsLogProperties.SUPPORTS_INCREMENTAL_REFRESH` field; the plugin no longer depends on either. The 2026.2 RC EAP build is not resolvable by the verifier tooling locally, but 2026.1.4/261 breaks identically, so it is a sound proxy.)
 - **Language/build:** Kotlin **2.1.21**, JVM target **21**; **Gradle 9.6.1 + IntelliJ Platform Gradle Plugin 2.18.1**. NOTE: plugin ≥ 2.12 requires Gradle 9; Kotlin stays on **2.1.x** deliberately — Kotlin 2.2 codegen references `kotlin.coroutines.jvm.internal.SpillingKt`, which is absent from 242/243's bundled Kotlin (→ runtime `NoSuchClassError`). `pluginVerification.failureLevel` fails only on `COMPATIBILITY_PROBLEMS` / `INVALID_PLUGIN`.
 
 ## Build / test / run
@@ -23,7 +23,7 @@ make build      # → ./gradlew buildPlugin   — assemble the plugin zip → bu
 make test       # → ./gradlew test          — hermetic unit / light-platform tests
 make integration-test  # → ./gradlew integrationTest — real-repo tests (needs sl + git)
 make check      # → ./gradlew build         — full compile + test + assemble (warning-free)
-make verify     # → ./gradlew verifyPlugin  — Plugin Verifier (IC 242/243/251/252 + IU 253)
+make verify     # → ./gradlew verifyPlugin  — Plugin Verifier (IC 242/243/251/252 + IU 253/2026.1.4)
 make run        # → ./gradlew runIde         — sandbox IDE (2024.2) for manual/GUI testing
 make run-253    # → ./gradlew runIde2025_3   — 2025.3 (IU) sandbox
 make clean      # → ./gradlew clean

@@ -488,19 +488,34 @@ class SaplingLogProvider(private val project: Project) : VcsLogProvider {
      *   advertising `true` would make the platform trust us to have already applied it and skip
      *   its own filtering — silently returning a superset. `false` makes the platform apply the
      *   PARENT filter itself against the graph from [readAllHashes], which is strictly safe.
-     * - All other Boolean props:    false (safe default per VcsLogProperty.getOrDefault).
+     * - SUPPORTS_INCREMENTAL_REFRESH: false — we do not implement incremental refresh; this
+     *   property's platform default is `true`, so we must actively decline it. The field was
+     *   removed in build 261, so it is resolved reflectively (see [incrementalRefreshProp]) rather
+     *   than referenced directly, to stay binary-compatible across 242 → 262+.
+     * - Any property we do not answer returns null → the platform uses that property's own default.
      */
     @Suppress("UNCHECKED_CAST")
     override fun <T> getPropertyValue(property: VcsLogProperties.VcsLogProperty<T>): T? {
+        if (incrementalRefreshProp != null && property === incrementalRefreshProp) return false as T
         return when (property) {
             VcsLogProperties.LIGHTWEIGHT_BRANCHES -> true as T
             VcsLogProperties.SUPPORTS_INDEXING -> false as T
             VcsLogProperties.HAS_COMMITTER -> false as T
             VcsLogProperties.SUPPORTS_LOG_DIRECTORY_HISTORY -> false as T
             VcsLogProperties.CASE_INSENSITIVE_REGEX -> false as T
-            VcsLogProperties.SUPPORTS_INCREMENTAL_REFRESH -> false as T
             VcsLogProperties.SUPPORTS_PARENTS_FILTER -> false as T
             else -> null
         }
     }
+
+    /**
+     * `VcsLogProperties.SUPPORTS_INCREMENTAL_REFRESH`, resolved reflectively because the field was
+     * removed in IntelliJ 261 — a direct `getstatic` would be an unresolved-field binary
+     * incompatibility there. Null when the field is absent (261+), in which case the platform no
+     * longer has the concept and there is nothing to decline.
+     */
+    private val incrementalRefreshProp: VcsLogProperties.VcsLogProperty<*>? = runCatching {
+        VcsLogProperties::class.java.getField("SUPPORTS_INCREMENTAL_REFRESH").get(null)
+            as VcsLogProperties.VcsLogProperty<*>
+    }.getOrNull()
 }

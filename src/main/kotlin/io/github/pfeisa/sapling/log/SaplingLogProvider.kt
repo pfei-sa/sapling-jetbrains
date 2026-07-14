@@ -1,10 +1,18 @@
 package io.github.pfeisa.sapling.log
 
 import io.github.pfeisa.sapling.SaplingVcs
+import io.github.pfeisa.sapling.changes.SaplingRevisionNumber
+import io.github.pfeisa.sapling.changes.commitStatusEntryToChange
+import io.github.pfeisa.sapling.changes.suppressRenameSources
 import io.github.pfeisa.sapling.cli.SaplingCli
+import io.github.pfeisa.sapling.status.parseSaplingStatus
+import io.github.pfeisa.sapling.util.SaplingPaths
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.progress.ProcessCanceledException
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vcs.FilePath
 import com.intellij.openapi.vcs.VcsException
 import com.intellij.openapi.vcs.changes.Change
 import com.intellij.openapi.vfs.VirtualFile
@@ -14,6 +22,7 @@ import com.intellij.vcs.log.Hash
 import com.intellij.vcs.log.TimedVcsCommit
 import com.intellij.vcs.log.VcsCommitMetadata
 import com.intellij.vcs.log.VcsFullCommitDetails
+import com.intellij.vcs.log.VcsLogFilterCollection
 import com.intellij.vcs.log.VcsLogObjectsFactory
 import com.intellij.vcs.log.VcsLogProperties
 import com.intellij.vcs.log.VcsLogProvider
@@ -21,9 +30,13 @@ import com.intellij.vcs.log.VcsLogRefManager
 import com.intellij.vcs.log.VcsLogRefresher
 import com.intellij.vcs.log.VcsRef
 import com.intellij.vcs.log.VcsUser
+import com.intellij.vcs.log.graph.PermanentGraph
 import com.intellij.vcs.log.impl.LogDataImpl
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.nio.file.Path
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.concurrent.ConcurrentHashMap
 
 private val LOG = logger<SaplingLogProvider>()
@@ -106,6 +119,29 @@ class SaplingLogProvider(private val project: Project) : VcsLogProvider {
         }
     }
 
+    /** Builds a [VcsCommitMetadata] from a parsed [SaplingLogEntry]. Shared by the read* methods. */
+    private fun buildMetadata(
+        entry: SaplingLogEntry,
+        root: VirtualFile,
+        f: VcsLogObjectsFactory,
+    ): VcsCommitMetadata {
+        val (authorName, authorEmail) = parseAuthor(entry.author)
+        val ts = entry.dateEpochSeconds * 1000L
+        return f.createCommitMetadata(
+            f.createHash(entry.node),
+            entry.parents.map { f.createHash(it) },
+            ts,
+            root,
+            entry.description.lineSequence().firstOrNull() ?: "",
+            authorName,
+            authorEmail,
+            entry.description,
+            authorName,   // Sapling has no separate committer
+            authorEmail,
+            ts,
+        )
+    }
+
     /**
      * Loads commit metadata from `sl log -Tjson`, bounded by [limit].
      * Passing `null` for limit returns all commits (only used internally by
@@ -117,24 +153,7 @@ class SaplingLogProvider(private val project: Project) : VcsLogProvider {
         val result = cli.run(root.path, args)
         if (!result.success) throw VcsException("sl log failed: ${result.stderr}")
         val f = factory()
-        return parseSaplingLog(result.stdout).map { entry ->
-            val (authorName, authorEmail) = parseAuthor(entry.author)
-            val commitTimestampMs = entry.dateEpochSeconds * 1000L
-            val parentHashes = entry.parents.map { f.createHash(it) }
-            f.createCommitMetadata(
-                /* id          */ f.createHash(entry.node),
-                /* parents     */ parentHashes,
-                /* commitTime  */ commitTimestampMs,
-                /* root        */ root,
-                /* subject     */ entry.description.lineSequence().firstOrNull() ?: "",
-                /* authorName  */ authorName,
-                /* authorEmail */ authorEmail,
-                /* fullMessage */ entry.description,
-                /* committerName  */ authorName,   // Sapling has no separate committer
-                /* committerEmail */ authorEmail,
-                /* authorTime  */ commitTimestampMs,
-            )
-        }
+        return parseSaplingLog(result.stdout).map { entry -> buildMetadata(entry, root, f) }
     }
 
     /**
@@ -174,30 +193,33 @@ class SaplingLogProvider(private val project: Project) : VcsLogProvider {
     }
 
     /**
-     * Called to load *all* commits for the full graph. Streams each commit to [consumer]
-     * to avoid materialising unbounded history in memory.
-     *
-     * Returns [LogDataImpl] with refs and the users seen in the streamed commits (the
-     * framework may discard the return value but it is included for correctness).
+     * Loads *all* commits for the full graph, **streaming** each to [consumer] as `sl` emits it (peak
+     * memory is O(one line), not O(history)). Uses a NUL-delimited line template so filenames/authors
+     * with spaces are unambiguous and the whole blob is never buffered or JSON-parsed at once.
      */
     @Throws(VcsException::class)
     override fun readAllHashes(
         root: VirtualFile,
         consumer: Consumer<in TimedVcsCommit>,
     ): VcsLogProvider.LogData {
-        // Stream via `sl log -T '{node}\n{p1node}\n{p2node}\n{date|hgdate}\n---\n'`
-        // Using json for simplicity and consistency with parseSaplingLog.
-        val result = cli.run(root.path, listOf("log", "-Tjson"))
-        if (!result.success) throw VcsException("sl log failed: ${result.stderr}")
         val f = factory()
         val users = mutableSetOf<VcsUser>()
-        parseSaplingLog(result.stdout).forEach { entry ->
-            val (authorName, authorEmail) = parseAuthor(entry.author)
-            val hash = f.createHash(entry.node)
-            val parents = entry.parents.map { f.createHash(it) }
-            val timestamp = entry.dateEpochSeconds * 1000L
-            consumer.consume(f.createTimedCommit(hash, parents, timestamp))
-            users.add(f.createUser(authorName, authorEmail))
+        // Fields: node, p1node, p2node, hgdate ("<epoch> <tz>"), author — NUL-separated, newline-terminated.
+        val template = "{node}\\0{p1node}\\0{p2node}\\0{date|hgdate}\\0{author}\\n"
+        val result = cli.runStreaming(root.path, listOf("log", "-T", template)) { line ->
+            val commit = parseStreamedCommitLine(line) ?: return@runStreaming
+            consumer.consume(
+                f.createTimedCommit(
+                    f.createHash(commit.node),
+                    commit.parents.map { f.createHash(it) },
+                    commit.timestampMs,
+                )
+            )
+            val (name, email) = parseAuthor(commit.author)
+            users.add(f.createUser(name, email))
+        }
+        if (!result.success) {
+            throw VcsException("sl log (streaming) failed with exit code ${result.exitCode}: ${result.stderr}")
         }
         val refs = loadRefs(root)
         return LogDataImpl(refs, users)
@@ -221,38 +243,18 @@ class SaplingLogProvider(private val project: Project) : VcsLogProvider {
         if (!result.success) throw VcsException("sl log failed: ${result.stderr}")
         val f = factory()
         parseSaplingLog(result.stdout).forEach { entry ->
-            val (authorName, authorEmail) = parseAuthor(entry.author)
-            val commitTimestampMs = entry.dateEpochSeconds * 1000L
-            val parentHashes = entry.parents.map { f.createHash(it) }
-            consumer.consume(
-                f.createCommitMetadata(
-                    f.createHash(entry.node),
-                    parentHashes,
-                    commitTimestampMs,
-                    root,
-                    entry.description.lineSequence().firstOrNull() ?: "",
-                    authorName,
-                    authorEmail,
-                    entry.description,
-                    authorName,
-                    authorEmail,
-                    commitTimestampMs,
-                )
-            )
+            consumer.consume(buildMetadata(entry, root, f))
         }
     }
 
     /**
-     * Provides full commit details (metadata + file changes) for the "Changes" panel.
+     * Provides full commit details (metadata + file changes) for the Log's "Changes" panel.
      *
-     * VcsFullCommitDetails requires getChanges(). Computing the change list for an
-     * arbitrary set of commits requires running `sl diff -r <hash>` for each, which
-     * is expensive and needs the IntelliJ change-model infrastructure. We satisfy the
-     * contract by returning a metadata-only implementation with empty Changes collections.
-     *
-     * This is safe: the IDE uses readFullDetails for the diff panel; if it returns empty
-     * changes the panel shows nothing but the app does not crash. The native diff is
-     * already wired via SaplingDiffProvider.
+     * Runs one `sl status --change <node> -Tjson --copies` per commit, **off the EDT**, sequentially
+     * (honouring cancellation between commits), and caches the resulting [Change] list in a
+     * [SaplingFullCommitDetails] whose `getChanges()` merely returns it — because the platform calls
+     * `getChanges()` on the EDT. For a **merge** commit the change set vs each further parent is also
+     * precomputed (`sl status --rev <parent> --rev <node>`), so `getChanges(parentIndex)` is EDT-safe too.
      */
     @Throws(VcsException::class)
     override fun readFullDetails(
@@ -262,29 +264,59 @@ class SaplingLogProvider(private val project: Project) : VcsLogProvider {
     ) {
         if (hashes.isEmpty()) return
         val revset = hashes.joinToString("+")
-        val args = listOf("log", "-Tjson", "-r", revset)
-        val result = cli.run(root.path, args)
+        val result = cli.run(root.path, listOf("log", "-Tjson", "-r", revset))
+        // No ProgressIndicator is passed to cli.run here or in computeCommitChanges below, so
+        // `.cancelled` can never actually flip true on this path — it's a defensive no-op.
+        // Real cancellation for this multi-subprocess loop comes from the
+        // ProgressManager.checkCanceled() calls between commits.
+        if (result.cancelled) throw ProcessCanceledException()
         if (!result.success) throw VcsException("sl log failed: ${result.stderr}")
         val f = factory()
+        val rootPath = root.toNioPath()
         parseSaplingLog(result.stdout).forEach { entry ->
-            val (authorName, authorEmail) = parseAuthor(entry.author)
-            val commitTimestampMs = entry.dateEpochSeconds * 1000L
-            val parentHashes = entry.parents.map { f.createHash(it) }
-            val metadata = f.createCommitMetadata(
-                f.createHash(entry.node),
-                parentHashes,
-                commitTimestampMs,
-                root,
-                entry.description.lineSequence().firstOrNull() ?: "",
-                authorName,
-                authorEmail,
-                entry.description,
-                authorName,
-                authorEmail,
-                commitTimestampMs,
-            )
-            consumer.consume(MetadataBackedFullDetails(metadata))
+            ProgressManager.checkCanceled()
+            val meta = buildMetadata(entry, root, f)
+            val changesByParent = HashMap<Int, List<Change>>()
+            val firstParent = entry.parents.firstOrNull()?.let { SaplingRevisionNumber(it) }
+            // Key 0: vs first parent (sl computes this automatically for --change).
+            changesByParent[0] = computeCommitChanges(root.path, rootPath, entry.node, firstParent, comparedParent = null)
+            // Merge: also compute vs each further parent so getChanges(i) is cached.
+            if (entry.parents.size > 1) {
+                entry.parents.forEachIndexed { i, parent ->
+                    if (i == 0) return@forEachIndexed
+                    ProgressManager.checkCanceled()
+                    changesByParent[i] =
+                        computeCommitChanges(root.path, rootPath, entry.node, SaplingRevisionNumber(parent), comparedParent = parent)
+                }
+            }
+            consumer.consume(SaplingFullCommitDetails(meta, changesByParent))
         }
+    }
+
+    /**
+     * Runs one `sl status` for a commit and maps it to [Change]s (both sides content-at-revision).
+     * [comparedParent] null → `--change <node>` (vs first parent); non-null → `--rev <parent> --rev <node>`.
+     * [beforeRev] is the parent the change is computed against (null only for the root commit).
+     */
+    private fun computeCommitChanges(
+        rootStr: String,
+        rootPath: Path,
+        node: String,
+        beforeRev: SaplingRevisionNumber?,
+        comparedParent: String?,
+    ): List<Change> {
+        val args = if (comparedParent == null) {
+            listOf("status", "--change", node, "-Tjson", "--copies")
+        } else {
+            listOf("status", "--rev", comparedParent, "--rev", node, "-Tjson", "--copies")
+        }
+        val res = cli.run(rootStr, args)
+        // Defensive no-op here too — see the comment on the equivalent guard in readFullDetails.
+        if (res.cancelled) throw ProcessCanceledException()
+        if (!res.success) throw VcsException("sl status for $node failed: ${res.stderr}")
+        val afterRev = SaplingRevisionNumber(node)
+        return suppressRenameSources(parseSaplingStatus(res.stdout))
+            .mapNotNull { commitStatusEntryToChange(it, rootPath, beforeRev, afterRev, cli) }
     }
 
     // ------------------------------------------------------------------
@@ -365,6 +397,83 @@ class SaplingLogProvider(private val project: Project) : VcsLogProvider {
     }
 
     // ------------------------------------------------------------------
+    // VcsLogProvider — toolbar filters
+    // ------------------------------------------------------------------
+
+    /**
+     * Returns commits matching [filters], bounded by [maxCount], by translating the filter collection
+     * into flag-form `sl log` args (see [buildLogFilterArgs]) and parsing the result. Overriding this
+     * 4-arg overload (present since 2024.2) is what makes the Log toolbar's text/user/date/path/hash
+     * filters work while `SUPPORTS_INDEXING` stays false. The [options] (graph layout) do not affect
+     * which commits match, so they are ignored here.
+     */
+    @Throws(VcsException::class)
+    override fun getCommitsMatchingFilter(
+        root: VirtualFile,
+        filters: VcsLogFilterCollection,
+        options: PermanentGraph.Options,
+        maxCount: Int,
+    ): List<TimedVcsCommit> {
+        val date = filters.get(VcsLogFilterCollection.DATE_FILTER)
+        val text = filters.get(VcsLogFilterCollection.TEXT_FILTER)
+        val paths = filters.get(VcsLogFilterCollection.STRUCTURE_FILTER)
+            ?.files?.mapNotNull { relativizeForRoot(root, it) } ?: emptyList()
+
+        val filterArgs = buildLogFilterArgs(
+            users = filters.get(VcsLogFilterCollection.USER_FILTER)?.valuesAsText?.toList() ?: emptyList(),
+            afterSpec = date?.after?.let(::formatSlDate),
+            beforeSpec = date?.before?.let(::formatSlDate),
+            text = text?.text,
+            paths = paths,
+            hashes = filters.get(VcsLogFilterCollection.HASH_FILTER)?.hashes?.toList() ?: emptyList(),
+        )
+        // Filter kinds we do not translate are left unapplied (never a wrong subset) — log if present.
+        val unsupported = filters.filters.map { it.key }.filter {
+            it != VcsLogFilterCollection.USER_FILTER && it != VcsLogFilterCollection.DATE_FILTER &&
+                it != VcsLogFilterCollection.TEXT_FILTER && it != VcsLogFilterCollection.STRUCTURE_FILTER &&
+                it != VcsLogFilterCollection.HASH_FILTER
+        }
+        if (unsupported.isNotEmpty()) LOG.info("Sapling log: unsupported filter(s) ignored: $unsupported")
+
+        val args = mutableListOf("log", "-Tjson")
+        if (maxCount > 0) { args += "-l"; args += maxCount.toString() }
+        args += filterArgs
+
+        val result = cli.run(root.path, args)
+        if (!result.success) throw VcsException("sl log (filtered) failed: ${result.stderr}")
+        val f = factory()
+        return parseSaplingLog(result.stdout).map { entry ->
+            f.createTimedCommit(
+                f.createHash(entry.node),
+                entry.parents.map { f.createHash(it) },
+                entry.dateEpochSeconds * 1000L,
+            )
+        }
+    }
+
+    /**
+     * Legacy 3-arg overload — delegates to the 4-arg one so the fix applies regardless of which
+     * overload the platform invokes (both exist since 2024.2). The platform member itself is
+     * `@Deprecated` (superseded by the 4-arg overload); narrowly suppressed rather than
+     * propagating `@Deprecated` onto this override, since it is still live dispatch surface.
+     */
+    @Suppress("OVERRIDE_DEPRECATION")
+    @Throws(VcsException::class)
+    override fun getCommitsMatchingFilter(
+        root: VirtualFile,
+        filters: VcsLogFilterCollection,
+        maxCount: Int,
+    ): List<TimedVcsCommit> =
+        getCommitsMatchingFilter(root, filters, PermanentGraph.Options.Default, maxCount)
+
+    /** Formats a filter [Date] as an `sl`-accepted date string (`yyyy-MM-dd HH:mm:ss`, all-numeric/locale-safe). */
+    private fun formatSlDate(date: Date): String = SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(date)
+
+    /** Repo-relative path for a structure-filter [file], or null if it is outside [root]. */
+    private fun relativizeForRoot(root: VirtualFile, file: FilePath): String? =
+        SaplingPaths.relative(root.toNioPath(), file.ioFile.toPath())
+
+    // ------------------------------------------------------------------
     // VcsLogProvider — feature properties
     // ------------------------------------------------------------------
 
@@ -374,6 +483,11 @@ class SaplingLogProvider(private val project: Project) : VcsLogProvider {
      * - LIGHTWEIGHT_BRANCHES: true  — bookmarks are cheap (no copy-on-write like SVN branches).
      * - SUPPORTS_INDEXING: false    — we do not implement the VcsLogIndex SPI.
      * - HAS_COMMITTER: false        — Sapling stores only author, not a separate committer.
+     * - SUPPORTS_PARENTS_FILTER: false — [getCommitsMatchingFilter] does not translate a PARENT
+     *   filter into `sl log` args (it falls into the logged "unsupported, ignored" bucket), so
+     *   advertising `true` would make the platform trust us to have already applied it and skip
+     *   its own filtering — silently returning a superset. `false` makes the platform apply the
+     *   PARENT filter itself against the graph from [readAllHashes], which is strictly safe.
      * - All other Boolean props:    false (safe default per VcsLogProperty.getOrDefault).
      */
     @Suppress("UNCHECKED_CAST")
@@ -385,29 +499,8 @@ class SaplingLogProvider(private val project: Project) : VcsLogProvider {
             VcsLogProperties.SUPPORTS_LOG_DIRECTORY_HISTORY -> false as T
             VcsLogProperties.CASE_INSENSITIVE_REGEX -> false as T
             VcsLogProperties.SUPPORTS_INCREMENTAL_REFRESH -> false as T
-            VcsLogProperties.SUPPORTS_PARENTS_FILTER -> true as T
+            VcsLogProperties.SUPPORTS_PARENTS_FILTER -> false as T
             else -> null
         }
-    }
-
-    // ------------------------------------------------------------------
-    // Inner class: metadata-backed VcsFullCommitDetails (empty changes)
-    // ------------------------------------------------------------------
-
-    /**
-     * Adapts a [VcsCommitMetadata] to [VcsFullCommitDetails] by delegating all
-     * metadata fields and returning empty change collections.
-     *
-     * This is used by [readFullDetails]. The Changes panel will be empty; full diff
-     * functionality is provided by [io.github.pfeisa.sapling.diff.SaplingDiffProvider].
-     *
-     * We delegate only to [VcsCommitMetadata] (which already extends VcsShortCommitDetails)
-     * to avoid the duplicate-supertype issue that arises from delegating both.
-     */
-    private class MetadataBackedFullDetails(
-        private val meta: VcsCommitMetadata,
-    ) : VcsFullCommitDetails, VcsCommitMetadata by meta {
-        override fun getChanges(): Collection<Change> = emptyList()
-        override fun getChanges(parent: Int): Collection<Change> = emptyList()
     }
 }

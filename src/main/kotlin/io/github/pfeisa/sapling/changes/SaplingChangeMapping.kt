@@ -61,3 +61,52 @@ fun statusEntryToChange(
         else -> null
     }
 }
+
+/**
+ * Maps one `sl status --change <rev>` (or `--rev p --rev rev`) entry to an IDE [Change] for a
+ * *historical commit* — so **both** sides are content-at-a-revision (via [SaplingContentRevision]),
+ * unlike [statusEntryToChange] whose after-side is the working copy ([CurrentContentRevision]).
+ *
+ * [beforeRev] is the parent revision the change is computed against (the commit's first parent for
+ * `--change`, or the specific parent for a merge's `getChanges(parentIndex)`). It is null only for the
+ * **root** commit, where `sl status --change` reports every file as `A` — so the before-side is null
+ * anyway and [beforeRev] is never dereferenced. A defensive null [beforeRev] on an M/R/copy entry also
+ * yields a null before-side rather than throwing.
+ */
+fun commitStatusEntryToChange(
+    entry: SaplingStatusEntry,
+    repoRoot: Path,
+    beforeRev: SaplingRevisionNumber?,
+    afterRev: SaplingRevisionNumber,
+    cli: SaplingCli,
+): Change? {
+    val rootStr = repoRoot.toString()
+
+    fun filePathOf(relative: String) =
+        VcsUtil.getFilePath(repoRoot.resolve(relative).toFile(), false)
+
+    fun before(relative: String) =
+        beforeRev?.let { SaplingContentRevision(filePathOf(relative), it, rootStr, relative, cli) }
+
+    fun after(relative: String) =
+        SaplingContentRevision(filePathOf(relative), afterRev, rootStr, relative, cli)
+
+    return when (entry.status) {
+        SaplingStatusCode.MODIFIED ->
+            Change(before(entry.path), after(entry.path))
+
+        SaplingStatusCode.ADDED -> {
+            val source = entry.copySource
+            if (source != null) {
+                Change(before(source), after(entry.path))
+            } else {
+                Change(null, after(entry.path))
+            }
+        }
+
+        SaplingStatusCode.REMOVED ->
+            Change(before(entry.path), null)
+
+        else -> null
+    }
+}

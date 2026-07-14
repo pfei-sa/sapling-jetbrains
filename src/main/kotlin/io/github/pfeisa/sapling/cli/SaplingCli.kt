@@ -1,11 +1,18 @@
 package io.github.pfeisa.sapling.cli
 
+import io.github.pfeisa.sapling.util.SaplingLineBuffer
 import com.intellij.execution.ExecutionException
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.process.CapturingProcessHandler
+import com.intellij.execution.process.OSProcessHandler
+import com.intellij.execution.process.ProcessEvent
+import com.intellij.execution.process.ProcessListener
+import com.intellij.execution.process.ProcessOutputTypes
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressIndicator
+import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.util.Key
 import com.intellij.util.concurrency.annotations.RequiresBackgroundThread
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
@@ -29,6 +36,17 @@ class SaplingByteResult(
     val cancelled: Boolean,
 ) {
     val success: Boolean get() = exitCode == 0 && !timedOut && !cancelled
+}
+
+/**
+ * Result of [SaplingCli.runStreaming]: the process exit code plus the (tiny, fully-buffered) stderr
+ * text — unlike stdout, which is streamed line-by-line and never buffered in full.
+ */
+data class SaplingStreamResult(
+    val exitCode: Int,
+    val stderr: String,
+) {
+    val success: Boolean get() = exitCode == 0
 }
 
 /**
@@ -117,5 +135,57 @@ class SaplingCli(
             LOG.warn("Failed to start sl ${args.joinToString(" ")}", e)
             SaplingByteResult(exitCode = -1, stdout = ByteArray(0), stderr = e.message ?: "failed to start sl", timedOut = false, cancelled = false)
         }
+    }
+
+    /**
+     * Runs `sl` and streams stdout **line by line** to [onLine] as the process emits it — so callers
+     * that iterate large output (e.g. full `sl log`) never buffer it all in memory. Returns the exit
+     * code plus the accumulated stderr (small — buffered in full, unlike stdout — mirroring the
+     * `${result.stderr}` convention every other method in this class uses for error messages).
+     * Cancellation: polls the indicator (or the ambient [ProgressManager]) and, on cancel, destroys
+     * the process and rethrows [ProcessCanceledException].
+     *
+     * No fixed timeout — the process ends when its output does; cancellation is the interrupt. [onLine]
+     * is invoked on the process-output reader thread; keep it cheap and thread-appropriate.
+     */
+    @RequiresBackgroundThread
+    fun runStreaming(
+        workingDir: String,
+        args: List<String>,
+        indicator: ProgressIndicator? = null,
+        onLine: (String) -> Unit,
+    ): SaplingStreamResult {
+        val cmd = buildCommandLine(workingDir, args)
+        val handler = try {
+            OSProcessHandler(cmd)
+        } catch (e: ExecutionException) {
+            LOG.warn("Failed to start sl ${args.joinToString(" ")}", e)
+            return SaplingStreamResult(exitCode = -1, stderr = e.message ?: "failed to start sl")
+        }
+        val buffer = SaplingLineBuffer()
+        val stderr = StringBuilder()
+        handler.addProcessListener(object : ProcessListener {
+            override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
+                if (outputType === ProcessOutputTypes.STDOUT) {
+                    buffer.append(event.text).forEach(onLine)
+                } else if (outputType === ProcessOutputTypes.STDERR) {
+                    stderr.append(event.text)
+                }
+            }
+
+            override fun processTerminated(event: ProcessEvent) {
+                buffer.remainder().takeIf { it.isNotBlank() }?.let(onLine)
+            }
+        })
+        handler.startNotify()
+        try {
+            while (!handler.waitFor(50)) {
+                if (indicator != null) indicator.checkCanceled() else ProgressManager.checkCanceled()
+            }
+        } catch (e: ProcessCanceledException) {
+            handler.destroyProcess()
+            throw e // control-flow exception — never swallow
+        }
+        return SaplingStreamResult(handler.exitCode ?: -1, stderr.toString())
     }
 }

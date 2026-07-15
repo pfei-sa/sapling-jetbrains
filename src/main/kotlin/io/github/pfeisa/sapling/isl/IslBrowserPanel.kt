@@ -1,6 +1,8 @@
 package io.github.pfeisa.sapling.isl
 
+import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.components.JBLabel
@@ -47,6 +49,25 @@ class IslBrowserPanel(
                 override fun onLoadEnd(b: org.cef.browser.CefBrowser, f: org.cef.browser.CefFrame, code: Int) {
                     if (disposed || !f.isMain) return
                     ts.pushCurrentTheme()
+                }
+            }, browser.cefBrowser)
+            browser.jbCefClient.addLifeSpanHandler(object : org.cef.handler.CefLifeSpanHandlerAdapter() {
+                override fun onBeforePopup(
+                    b: org.cef.browser.CefBrowser,
+                    f: org.cef.browser.CefFrame,
+                    targetUrl: String?,
+                    targetFrameName: String?,
+                ): Boolean {
+                    // ISL surfaces external links (e.g. GitHub PR links) as target=_blank /
+                    // window.open. Route them to the OS browser instead of a dead in-webview
+                    // popup. Return true to cancel the popup either way; an unsafe/blocked URL
+                    // is dropped and never logged with its content.
+                    if (!disposed && isSafeExternalUrl(targetUrl)) {
+                        ApplicationManager.getApplication().invokeLater {
+                            if (!disposed) BrowserUtil.browse(targetUrl!!)
+                        }
+                    }
+                    return true
                 }
             }, browser.cefBrowser)
         }

@@ -28,6 +28,9 @@ dependencies {
         // intellij.platform.vcs.impl → ShowDiffAction.showDiffForChange for ISL native-diff interception.
         bundledModule("intellij.platform.vcs.impl")
         testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
+        // The Marketplace ZIP Signer tool `signPlugin` shells out to — resolved from defaultRepositories()
+        // (Maven Central). Without it, `signPlugin` fails with "Cannot resolve 'Marketplace ZIP Signer'".
+        zipSigner()
     }
 
     testImplementation("junit:junit:4.13.2")
@@ -40,6 +43,19 @@ intellijPlatform {
             sinceBuild = "242"
             untilBuild = provider { null }
         }
+    }
+    signing {
+        // Values come from GitHub Actions secrets (env vars) at publish time; unset locally, so a plain
+        // `buildPlugin` stays unsigned. Generated with openssl (RSA-4096, self-signed) — see release docs.
+        certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN")
+        privateKey = providers.environmentVariable("PRIVATE_KEY")
+        password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
+    }
+    publishing {
+        // Marketplace permanent token (stored as the JB_TOKEN secret, mapped to PUBLISH_TOKEN in CI).
+        token = providers.environmentVariable("PUBLISH_TOKEN")
+        // channels default to "default" = the Stable channel. Use listOf("eap")/listOf("beta") for a
+        // pre-release line that only opted-in users receive.
     }
     pluginVerification {
         // The 2.18 verifier is far stricter than older ones. Fail only on genuinely-fatal categories

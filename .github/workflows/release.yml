@@ -22,17 +22,34 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      # Caches the Gradle dependency cache (incl. the large IntelliJ IDE distributions), wrapper,
+      # build cache, and configuration cache. Writes only from the default branch; PRs read-only.
+      - uses: gradle/actions/setup-gradle@v4
       - name: Compute version
         id: version
         run: echo "version=${BASE_VERSION}.$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
-      - name: Build plugin
-        run: ./gradlew test buildPlugin -PpluginVersion=${{ steps.version.outputs.version }}
-      - name: Create release
+      - name: Build & sign plugin
+        env:
+          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
+        run: ./gradlew test buildPlugin signPlugin -PpluginVersion=${{ steps.version.outputs.version }}
+      - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "v${{ steps.version.outputs.version }}" \
-            build/distributions/*.zip \
+            build/distributions/*-signed.zip \
             --target "$GITHUB_SHA" \
             --title "v${{ steps.version.outputs.version }}" \
             --generate-notes
+      # Publishes AFTER the GitHub release is created, so a publish failure (e.g. the very first
+      # version of a brand-new plugin, which JetBrains requires be uploaded + moderated via the web
+      # UI before the token can push updates) never loses the release + signed artifact.
+      - name: Publish to JetBrains Marketplace
+        env:
+          PUBLISH_TOKEN: ${{ secrets.JB_TOKEN }}
+          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
+        run: ./gradlew publishPlugin -PpluginVersion=${{ steps.version.outputs.version }}

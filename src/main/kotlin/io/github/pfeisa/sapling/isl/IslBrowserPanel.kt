@@ -6,7 +6,6 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.components.JBLabel
-import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
 import java.awt.BorderLayout
 import javax.swing.JPanel
@@ -22,8 +21,10 @@ class IslBrowserPanel(
 
     val component: JPanel = JPanel(BorderLayout())
 
+    // Gate via JcefSupport, not JBCefApp.isSupported() — the JBCefApp class itself may be
+    // absent from this process (Rider / remote-dev backend), see JcefSupport.
     private val browser: JBCefBrowser? =
-        if (JBCefApp.isSupported()) JBCefBrowser().also { Disposer.register(this, it) } else null
+        if (JcefSupport.isAvailable) JBCefBrowser().also { Disposer.register(this, it) } else null
 
     @Volatile
     private var disposed = false

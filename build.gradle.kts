@@ -108,6 +108,17 @@ intellijPlatformTesting {
 }
 
 tasks {
+    // Dev-only: `-PopenProject=<path>` makes any runIde task open that project directly instead
+    // of the IDE welcome screen (used by `make run` to open the generated dummy sl repo, see
+    // scripts/dummy-repo.sh). Without the property, behavior is unchanged.
+    val openProject = providers.gradleProperty("openProject")
+    withType<org.jetbrains.intellij.platform.gradle.tasks.RunIdeTask>().configureEach {
+        argumentProviders.add(
+            org.gradle.process.CommandLineArgumentProvider {
+                openProject.map { listOf(it) }.getOrElse(emptyList())
+            }
+        )
+    }
     withType<JavaCompile> {
         sourceCompatibility = "21"
         targetCompatibility = "21"

@@ -2,6 +2,7 @@ package io.github.pfeisa.sapling.isl
 
 import io.github.pfeisa.sapling.changes.changeForComparison
 import io.github.pfeisa.sapling.changes.classifyForComparison
+import io.github.pfeisa.sapling.changes.isComparisonTypeSupported
 import io.github.pfeisa.sapling.util.SaplingNotifications
 import io.github.pfeisa.sapling.util.resolveWithinRepoLexical as resolveWithinRepoLexicalPure
 import com.intellij.openapi.ide.CopyPasteManager
@@ -14,6 +15,7 @@ import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.text.StringUtil
+import com.intellij.openapi.vcs.changes.CurrentContentRevision
 import com.intellij.openapi.vcs.changes.actions.diff.ShowDiffAction
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.jcef.JBCefBrowser
@@ -133,7 +135,7 @@ class IdeBridge(
             return
         }
         val type = comparison.type
-        if (type != "Uncommitted" && type != "Commit") {
+        if (!isComparisonTypeSupported(type)) {
             notify("Opening ${StringUtil.escapeXmlEntities(type)} comparisons in the IDE isn't supported yet.")
             return
         }
@@ -146,11 +148,11 @@ class IdeBridge(
             val change = entry?.let {
                 changeForComparison(type, comparison.hash, it.status, it.copySource, root, relativePath)
             }
-            // The working-copy (after) side of an Uncommitted MODIFIED/ADDED/UNTRACKED diff reads a
+            // A working-copy (after) side — Uncommitted/Head/Stack MODIFIED/ADDED/UNTRACKED — reads a
             // real on-disk file (same as openFile), so it needs the symlink-resolving real guard, not
-            // just the lexical one already checked above. Commit diffs and Uncommitted
+            // just the lexical one already checked above. Commit diffs and working-copy
             // REMOVED/MISSING stay lexical-only: the file may legitimately be absent from disk.
-            if (type == "Uncommitted" && change?.afterRevision != null && resolveWithinRepoReal(relativePath) == null) {
+            if (change?.afterRevision is CurrentContentRevision && resolveWithinRepoReal(relativePath) == null) {
                 LOG.warn("Ignoring __IdeBridge diff request resolving outside the repository root")
                 return@executeOnPooledThread
             }

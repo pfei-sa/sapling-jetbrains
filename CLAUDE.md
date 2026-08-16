@@ -24,8 +24,11 @@ make test       # → ./gradlew test          — hermetic unit / light-platform
 make integration-test  # → ./gradlew integrationTest — real-repo tests (needs sl + git)
 make check      # → ./gradlew build         — full compile + test + assemble (warning-free)
 make verify     # → ./gradlew verifyPlugin  — Plugin Verifier (IC 242/243/251/252 + IU 253/2026.1.4)
-make run        # → ./gradlew runIde         — sandbox IDE (2024.2) for manual/GUI testing
-make run-253    # → ./gradlew runIde2025_3   — 2025.3 (IU) sandbox
+make run        # → ./gradlew runIde         — sandbox IDE (2024.2) opened on a regenerated dummy
+                #   git-backed sl repo (build/dummy-repo: 3 commits, bookmark, M/A/R/!/?/ignored
+                #   working tree — see scripts/dummy-repo.sh); plain `./gradlew runIde` still opens
+                #   the welcome screen (`-PopenProject=<path>` is what opens a project)
+make run-253    # → ./gradlew runIde2025_3   — 2025.3 (IU) sandbox, same dummy repo
 make clean      # → ./gradlew clean
 ```
 

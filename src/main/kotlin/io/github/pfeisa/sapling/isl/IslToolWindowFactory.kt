@@ -33,6 +33,18 @@ class IslToolWindowFactory : ToolWindowFactory, DumbAware {
             return
         }
 
+        // Checked here (not just inside IslBrowserPanel) so no ISL server is launched for a
+        // webview that can never render. JcefSupport explains why this is not JBCefApp.isSupported().
+        if (!JcefSupport.isAvailable) {
+            val content = contentFactory.createContent(
+                JBLabel("This IDE process has no JCEF runtime, so ISL cannot be embedded. Run 'sl web' in a terminal instead."),
+                "",
+                false,
+            )
+            toolWindow.contentManager.addContent(content)
+            return
+        }
+
         val panel = IslBrowserPanel(project, root)
         Disposer.register(toolWindow.disposable, panel)
 

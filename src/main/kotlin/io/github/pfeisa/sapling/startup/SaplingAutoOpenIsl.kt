@@ -1,6 +1,7 @@
 package io.github.pfeisa.sapling.startup
 
 import io.github.pfeisa.sapling.detection.SaplingRepoDetector
+import io.github.pfeisa.sapling.isl.JcefSupport
 import io.github.pfeisa.sapling.settings.SaplingSettings
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.project.Project
@@ -17,6 +18,9 @@ import java.nio.file.Paths
 class SaplingAutoOpenIsl : ProjectActivity {
     override suspend fun execute(project: Project) {
         if (!SaplingSettings.getInstance().autoOpenIsl) return
+        // Without JCEF (e.g. Rider / remote-dev backend) the tool window would only show a
+        // fallback message — don't pop it open on every project load.
+        if (!JcefSupport.isAvailable) return
         val base = project.basePath ?: return
         // Match ISL availability (both `.sl` and dotgit modes), not just `.sl` roots.
         if (SaplingRepoDetector.findWorkingCopyRoot(Paths.get(base)) == null) return

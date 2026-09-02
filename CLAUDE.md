@@ -25,14 +25,21 @@ make integration-test  # → ./gradlew integrationTest — real-repo tests (need
 make check      # → ./gradlew build         — full compile + test + assemble (warning-free)
 make verify     # → ./gradlew verifyPlugin  — Plugin Verifier (IC 242/243/251/252 + IU 253/2026.1.4)
 make run        # → ./gradlew runIde         — sandbox IDE (2024.2) opened on a regenerated dummy
-                #   git-backed sl repo (build/dummy-repo: 3 commits, bookmark, M/A/R/!/?/ignored
-                #   working tree — see scripts/dummy-repo.sh); plain `./gradlew runIde` still opens
-                #   the welcome screen (`-PopenProject=<path>` is what opens a project)
+                #   git-backed sl repo ($TMPDIR/sapling-jetbrains-dummy-repo: 3 commits, bookmark,
+                #   M/A/R/!/?/ignored working tree — see scripts/dummy-repo.sh); plain
+                #   `./gradlew runIde` still opens the welcome screen (`-PopenProject=<path>` is
+                #   what opens a project)
 make run-253    # → ./gradlew runIde2025_3   — 2025.3 (IU) sandbox, same dummy repo
 make clean      # → ./gradlew clean
 ```
 
 - **A JDK 21 is required.** Gradle finds it via `JAVA_HOME` or `org.gradle.java.home`. On this machine JDK 21 is a keg-only Homebrew install at `/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home` and is pinned in `~/.gradle/gradle.properties`. The **gradlew launcher** additionally needs `JAVA_HOME` set to bootstrap the JVM; the `Makefile` exports it, so prefer `make`. If a bare `./gradlew` command reports "Unable to locate a Java Runtime", `export JAVA_HOME=…` first.
+- **The dummy repo must live outside this checkout** (hence `$TMPDIR`, not `build/`). `sl` lets an
+  ancestor **git** working tree shadow a nested Sapling repo: with a `.git` anywhere above it, `sl root`
+  inside the nested repo resolves to that *outer* repo, so `sl add`/`sl commit` there commit into the
+  plugin's own checkout. (An ancestor `.sl` repo does **not** shadow it — only a git checkout does;
+  `sl -R <path>` resolves correctly, `sl --cwd <path>` does not.) `scripts/dummy-repo.sh` asserts
+  `sl root` == the target right after `sl init` and aborts otherwise.
 - **A warning-free build is a hard requirement.** Kotlin compiler warnings (esp. deprecations) are treated as defects here — fix or narrowly `@Suppress` them, don't leave them.
 - `sl` must be installed for anything that actually runs commands; unit tests do not need it (they test pure parsers / mapping).
 

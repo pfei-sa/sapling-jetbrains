@@ -32,9 +32,19 @@ object SaplingPaths {
 
 /** Lexical containment only (rejects absolute + `../`-escaping paths). Does NOT require existence,
  *  so a committed diff of a file absent from the working copy still validates. Pure/testable —
- *  callers needing symlink resolution + on-disk existence should resolve this further themselves. */
+ *  callers needing symlink resolution + on-disk existence should use [resolveWithinRepoReal]. */
 internal fun resolveWithinRepoLexical(repoRoot: String, relativePath: String): Path? {
     val root = Paths.get(repoRoot).normalize()
     val target = root.resolve(relativePath).normalize()
     return if (target.startsWith(root)) target else null
+}
+
+/** [resolveWithinRepoLexical] plus symlink resolution and on-disk existence — for paths whose
+ *  content is read from the live working copy, where a symlink could otherwise escape the repo.
+ *  Returns null if the file does not exist, so callers must only apply it where it should. */
+internal fun resolveWithinRepoReal(repoRoot: String, relativePath: String): Path? {
+    val lexical = resolveWithinRepoLexical(repoRoot, relativePath) ?: return null
+    val realRoot = runCatching { Paths.get(repoRoot).normalize().toRealPath() }.getOrNull() ?: return null
+    val realTarget = runCatching { lexical.toRealPath() }.getOrNull() ?: return null
+    return if (realTarget.startsWith(realRoot)) realTarget else null
 }

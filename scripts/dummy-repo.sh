@@ -1,19 +1,38 @@
 #!/bin/bash
 # Regenerates the throwaway git-backed Sapling repo that `make run` opens the sandbox IDE on.
-# Usage: scripts/dummy-repo.sh [target-dir]   (default: build/dummy-repo)
+# Usage: scripts/dummy-repo.sh [target-dir]   (default: $TMPDIR/sapling-jetbrains-dummy-repo)
 #
 # The repo is rebuilt from scratch on every invocation so manual-testing sessions always start
 # from the same known state: three commits, a bookmark, and a working tree that exercises every
 # status the plugin maps (M / A / R / ! / ? / ignored).
+#
+# The target MUST live outside any git working tree — including this plugin's own checkout, so
+# not `build/`. `sl` lets an ancestor git working tree shadow a nested Sapling repo: with a
+# `.git` anywhere above the target, `sl root` inside the target resolves to THAT repo instead,
+# and the `sl add`/`sl commit` calls below would commit these fixture files straight into it.
+# (An ancestor `.sl` repo does not shadow it — only an ancestor git checkout does.) The guard
+# after `sl init` refuses to continue if that happens.
 set -euo pipefail
 
-TARGET="${1:-build/dummy-repo}"
+TARGET="${1:-${TMPDIR:-/tmp}/sapling-jetbrains-dummy-repo}"
 
 rm -rf "$TARGET"
 mkdir -p "$TARGET"
 cd "$TARGET"
 
 sl init --git .
+
+# Refuse to touch a repo that is not the one we just created (see the note above).
+ACTUAL_ROOT="$(sl root)"
+EXPECTED_ROOT="$(pwd -P)"
+if [ "$ACTUAL_ROOT" != "$EXPECTED_ROOT" ]; then
+    echo "error: sl resolved this fixture to '$ACTUAL_ROOT', not '$EXPECTED_ROOT'." >&2
+    echo "       A git working tree above the target directory is shadowing it; committing" >&2
+    echo "       here would write the fixture commits into that repo. Choose a target outside" >&2
+    echo "       any git checkout (see DUMMY_REPO in the Makefile)." >&2
+    exit 1
+fi
+
 # Repo-local identity, so commits work regardless of the machine's global sl/git config.
 printf '\n[ui]\nusername = Sapling Sandbox <sandbox@example.com>\n' >> .sl/config
 

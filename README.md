@@ -44,6 +44,8 @@ Sapling repositories don't work with the built-in Git integration. This plugin f
 
 - Opens Sapling's web UI in a dockable **Sapling ISL** tool window.
 - Click a file in ISL to open it in the editor.
+- "Open Diff View" opens the IDE's native diff, with next/previous-file arrows and a file
+  list covering every file in that commit or comparison.
 - ISL "copy" actions use the IDE clipboard, and the ISL theme follows your IDE's light/dark theme.
 
 ---

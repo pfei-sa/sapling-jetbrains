@@ -1,10 +1,15 @@
 package io.github.pfeisa.sapling.isl
 
 import io.github.pfeisa.sapling.changes.changeForComparison
+import io.github.pfeisa.sapling.changes.changesForComparison
 import io.github.pfeisa.sapling.changes.classifyForComparison
+import io.github.pfeisa.sapling.changes.collectComparisonEntries
+import io.github.pfeisa.sapling.changes.containedComparisonChanges
+import io.github.pfeisa.sapling.changes.indexOfComparisonChange
 import io.github.pfeisa.sapling.changes.isComparisonTypeSupported
 import io.github.pfeisa.sapling.util.SaplingNotifications
 import io.github.pfeisa.sapling.util.resolveWithinRepoLexical as resolveWithinRepoLexicalPure
+import io.github.pfeisa.sapling.util.resolveWithinRepoReal as resolveWithinRepoRealPure
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
@@ -121,13 +126,10 @@ class IdeBridge(
     private fun resolveWithinRepoLexical(relativePath: String): Path? =
         resolveWithinRepoLexicalPure(repoRoot, relativePath)
 
-    /** Lexical check plus symlink resolution + existence — used where a real on-disk file is opened. */
-    private fun resolveWithinRepoReal(relativePath: String): Path? {
-        val lexical = resolveWithinRepoLexical(relativePath) ?: return null
-        val realRoot = runCatching { Paths.get(repoRoot).normalize().toRealPath() }.getOrNull() ?: return null
-        val realTarget = runCatching { lexical.toRealPath() }.getOrNull() ?: return null
-        return if (realTarget.startsWith(realRoot)) realTarget else null
-    }
+    /** Lexical check plus symlink resolution + existence — used where a real on-disk file is opened.
+     *  Delegates to the pure, unit-tested [resolveWithinRepoRealPure]. */
+    private fun resolveWithinRepoReal(relativePath: String): Path? =
+        resolveWithinRepoRealPure(repoRoot, relativePath)
 
     private fun openDiff(relativePath: String, comparison: Comparison) {
         if (resolveWithinRepoLexical(relativePath) == null) {
@@ -144,25 +146,52 @@ class IdeBridge(
         ApplicationManager.getApplication().executeOnPooledThread {
             if (disposed) return@executeOnPooledThread
             val root = Paths.get(repoRoot)
-            val entry = classifyForComparison(type, comparison.hash, root, relativePath)
-            val change = entry?.let {
-                changeForComparison(type, comparison.hash, it.status, it.copySource, root, relativePath)
+            // ISL sends one path per click, but the viewer only offers next/previous-file arrows
+            // when it is handed more than one request — so list the whole comparison and open it
+            // positioned on the clicked file. The platform loads each file's content lazily, so a
+            // large commit still costs just this one `sl status`.
+            val entries = collectComparisonEntries(type, comparison.hash, root)
+            val listed = changesForComparison(type, comparison.hash, entries, root)
+            val siblings = containedComparisonChanges(listed, repoRoot)
+            if (siblings.size != listed.size) {
+                LOG.warn("Dropped ${listed.size - siblings.size} comparison entries resolving outside the repository root")
             }
-            // A working-copy (after) side — Uncommitted/Head/Stack MODIFIED/ADDED/UNTRACKED — reads a
-            // real on-disk file (same as openFile), so it needs the symlink-resolving real guard, not
-            // just the lexical one already checked above. Commit diffs and working-copy
-            // REMOVED/MISSING stay lexical-only: the file may legitimately be absent from disk.
-            if (change?.afterRevision is CurrentContentRevision && resolveWithinRepoReal(relativePath) == null) {
-                LOG.warn("Ignoring __IdeBridge diff request resolving outside the repository root")
+            val index = indexOfComparisonChange(siblings, relativePath)
+            if (index < 0) {
+                // The listing failed, disagreed with ISL about the path, or the entry was dropped
+                // by the guards — fall back to a single-file diff so a click never does nothing.
+                openSingleFileDiff(type, comparison.hash, root, relativePath)
                 return@executeOnPooledThread
             }
+            val changes = siblings.map { it.change }
             ApplicationManager.getApplication().invokeLater {
                 if (disposed) return@invokeLater
-                if (change == null) {
-                    notify("No diff available for ${StringUtil.escapeXmlEntities(relativePath)}.")
-                } else {
-                    ShowDiffAction.showDiffForChange(project, listOf(change))
-                }
+                ShowDiffAction.showDiffForChange(project, changes, index)
+            }
+        }
+    }
+
+    /** The single clicked file on its own — the fallback when [openDiff] cannot place it in the
+     *  comparison's file list. Runs `sl`, so it must be called off the EDT. */
+    private fun openSingleFileDiff(type: String, hash: String?, root: Path, relativePath: String) {
+        val entry = classifyForComparison(type, hash, root, relativePath)
+        val change = entry?.let {
+            changeForComparison(type, hash, it.status, it.copySource, root, relativePath)
+        }
+        // A working-copy (after) side — Uncommitted/Head/Stack MODIFIED/ADDED/UNTRACKED — reads a
+        // real on-disk file (same as openFile), so it needs the symlink-resolving real guard, not
+        // just the lexical one already checked by the caller. Commit diffs and working-copy
+        // REMOVED/MISSING stay lexical-only: the file may legitimately be absent from disk.
+        if (change?.afterRevision is CurrentContentRevision && resolveWithinRepoReal(relativePath) == null) {
+            LOG.warn("Ignoring __IdeBridge diff request resolving outside the repository root")
+            return
+        }
+        ApplicationManager.getApplication().invokeLater {
+            if (disposed) return@invokeLater
+            if (change == null) {
+                notify("No diff available for ${StringUtil.escapeXmlEntities(relativePath)}.")
+            } else {
+                ShowDiffAction.showDiffForChange(project, listOf(change))
             }
         }
     }

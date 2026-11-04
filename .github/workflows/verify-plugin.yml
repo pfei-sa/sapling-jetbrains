@@ -21,7 +21,7 @@ jobs:
       # own home (~/.pluginVerifier/ides), OUTSIDE ~/.gradle, so setup-gradle doesn't cover them.
       # Keyed on build.gradle.kts, which lists the IDEs — the key invalidates when that set changes.
       - name: Cache Plugin Verifier IDEs
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.pluginVerifier/ides
           key: plugin-verifier-ides-${{ hashFiles('build.gradle.kts') }}

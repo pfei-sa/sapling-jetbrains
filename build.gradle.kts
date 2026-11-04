@@ -19,7 +19,7 @@ repositories {
 
 dependencies {
     // Shipped with the IDE at runtime, so compileOnly.
-    compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
+    compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
 
     intellijPlatform {
         create("IC", "2024.2")

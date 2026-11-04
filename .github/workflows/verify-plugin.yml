@@ -14,7 +14,7 @@ jobs:
           java-version: '21'
       # Caches the Gradle dependency cache (incl. the large IntelliJ IDE distributions), wrapper,
       # build cache, and configuration cache. Writes only from the default branch; PRs read-only.
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       - name: Build and test
         run: ./gradlew test buildPlugin
       # The Plugin Verifier downloads its target IDEs (IC 242/243/251/252 + IU 253/2026.1.4) to its
